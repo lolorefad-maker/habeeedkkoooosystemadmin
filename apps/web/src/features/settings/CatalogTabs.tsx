@@ -304,7 +304,11 @@ export function ProductModal({ product, categories, onClose }: { product: Produc
             ))}
           </datalist>
         </Field>
-        <Field label={t('settings.product.price')} htmlFor="p-price">
+        <Field
+          label={t('settings.product.price')}
+          htmlFor="p-price"
+          error={form.price.trim() !== '' && (price == null || price < 0) ? t('settings.product.priceInvalid', { example: f.money(1250) }) : undefined}
+        >
           <Input id="p-price" inputMode="decimal" className="num" value={form.price} onChange={(e) => set({ price: e.target.value })} placeholder={f.money(0)} />
         </Field>
         <Field

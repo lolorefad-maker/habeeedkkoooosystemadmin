@@ -25,7 +25,13 @@ describe('money', () => {
 
   it('parses user input into minor units', () => {
     expect(parseMoney('3.5', 3)).toBe(3500);
-    expect(parseMoney('٣٫٥'.replace('٫', '.'), 3)).toBe(3500);
+    expect(parseMoney('٣٫٥', 3)).toBe(3500);
+    expect(parseMoney('۱٫۲۵', 3)).toBe(1250);
+    expect(parseMoney('1ز5', 3)).toBe(1500); // "." on the Arabic keyboard layout
+    expect(parseMoney('١٬٢٥٠', 2)).toBe(125000);
+    expect(parseMoney('⁨1.750⁩', 3)).toBe(1750);
+    expect(parseMoney('1 دينار', 3)).toBeNull();
+    expect(parseMoney('1.5.0', 3)).toBeNull();
     expect(parseMoney('1,250', 2)).toBe(125000);
     expect(parseMoney('1.2345', 3)).toBeNull();
     expect(parseMoney('abc', 3)).toBeNull();

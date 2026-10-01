@@ -177,6 +177,7 @@ export const en: Dict = {
       stock: 'Stock', stockNow: 'Pieces in stock', stockNowHint: 'Now {n} — change it if you counted the shelf',
       stockNewHint: 'Type how many you have now (e.g. 24)', categoryHint: 'e.g. Cold drinks, Snacks',
       lowStockAt: 'Warn me when', lowStockHint: 'A "running low" warning shows at this count',
+      priceInvalid: 'Type the price in numbers only, like {example}',
     },
     staffForm: { add: 'Add staff', role: 'Role', pin: 'Login PIN (4–8 digits)', pinKeep: 'Leave empty to keep the current PIN' },
     policy: {

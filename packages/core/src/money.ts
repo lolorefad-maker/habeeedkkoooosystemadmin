@@ -60,9 +60,19 @@ export function formatMoney(value: Minor, fmt: CurrencyFormat, opts: { symbol?: 
   return nf.format(value / 10 ** fmt.decimals);
 }
 
-/** Parse a user-typed major-unit string ("3.5", "3,500") into minor units. Returns null if invalid. */
+/**
+ * Parse a user-typed major-unit string ("3.5", "3,500", "٣٫٥") into minor units. Returns null if invalid.
+ * Arabic keyboards are taken as typed: Arabic-Indic and Persian digits, the Arabic decimal sign "٫",
+ * the Arabic thousands sign "٬", and "ز" — what the "." key types on the Arabic keyboard layout.
+ */
 export function parseMoney(input: string, decimals: number): Minor | null {
-  const cleaned = input.trim().replace(/[\s,]/g, '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  const cleaned = input
+    .replace(/[‎‏؜‪-‮⁦-⁩]/g, '')
+    .trim()
+    .replace(/[\s,٬]/g, '')
+    .replace(/[٫ز]/g, '.')
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x6f0));
   if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
   const [int, frac = ''] = cleaned.replace('-', '').split('.');
   if (frac.length > decimals) return null;

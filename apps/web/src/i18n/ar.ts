@@ -559,6 +559,7 @@ export const ar = {
       categoryHint: 'مثل: مشروبات باردة، سناكس',
       lowStockAt: 'نبّهني عندما يبقى',
       lowStockHint: 'يظهر تنبيه "أوشك على النفاد" عند هذا العدد',
+      priceInvalid: 'اكتب السعر أرقاماً فقط، مثل {example}',
     },
     staffForm: {
       add: 'إضافة موظف',
