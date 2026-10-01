@@ -1,0 +1,28 @@
+{
+  "name": "lounge-os",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Hybrid (local + cloud) management system for PlayStation / VR gaming lounges with cafeteria",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @lounge/server\" \"npm run dev -w @lounge/web\"",
+    "dev:server": "npm run dev -w @lounge/server",
+    "dev:web": "npm run dev -w @lounge/web",
+    "build": "npm run build -w @lounge/web && npm run build -w @lounge/server",
+    "start": "npm run start -w @lounge/server",
+    "test": "npm run test -w @lounge/core && npm run test -w @lounge/server && npm run test -w @lounge/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @lounge/server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

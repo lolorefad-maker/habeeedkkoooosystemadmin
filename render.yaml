@@ -1,0 +1,41 @@
+# Render Blueprint: one web service (web app + API + realtime + scheduler) and a managed Postgres.
+# In Render: New → Blueprint → pick this repo. You will be asked for the values marked `sync: false`.
+services:
+  - type: web
+    name: lounge-os
+    runtime: node
+    region: frankfurt # closest Render region to the Levant
+    plan: starter # always on: the free plan sleeps, which stops timers, day close and controller charging
+    buildCommand: npm ci && npm run build -w @lounge/web
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # Deploy updates when you choose (shop closed), not automatically mid-shift.
+    autoDeploy: false
+    # Keep exactly one instance: the scheduler (day close, no-shows, charged controllers) runs inside it.
+    numInstances: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: LOUNGE_MODE
+        value: cloud
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lounge-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      # Shop code every device enters once (at least 6 characters). Change it to lock out all devices.
+      - key: LOUNGE_ACCESS_CODE
+        sync: false
+      # First start only: the owner account (PIN 6–8 digits). Add everyone else from Settings → Staff.
+      - key: LOUNGE_OWNER_PIN
+        sync: false
+      - key: LOUNGE_OWNER_NAME
+        sync: false
+
+databases:
+  - name: lounge-db
+    databaseName: lounge
+    user: lounge
+    region: frankfurt
+    plan: basic-256mb # paid plan: daily backups; free databases expire
