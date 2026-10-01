@@ -1,8 +1,9 @@
-import { DomainError, type TimeBill } from '@lounge/core';
+import { DomainError, businessDayRange, type TimeBill } from '@lounge/core';
 import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { Q } from '../db';
-import { bills, payments, sessions, stations } from '../db/schema';
+import { bills, businessDays, payments, sessions, stations } from '../db/schema';
+import { getBranch } from './common';
 import { carriedSoFar, carriesOnDays } from './carries';
 
 /** Money received per method, from the payments table (prepaid, during play, at checkout, deposits, refunds). */
@@ -61,6 +62,10 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
       paidByMethod: byMethod(pays.filter((p) => p.billId === b.id)),
       /** A cafeteria sale (no device). */
       counter: !!bd.counter,
+      paidAt: null as number | null,
+      billTotal: null as number | null,
+      billPaidByMethod: null as Record<string, number> | null,
+      voided: false,
       /** Already counted on an earlier day (what was played and taken before that day ended). */
       carriedOutTime: b.sessionId ? (earlier.get(b.sessionId)?.time ?? 0) : 0,
       carriedOutItems: b.sessionId ? (earlier.get(b.sessionId)?.items ?? 0) : 0,
@@ -68,25 +73,37 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
     };
   });
 
-  // Sessions that were still open when this day ended: this day's share of them.
+  // Sessions that were still open when this day ended: this day's share of them — from when they
+  // started to the day's end (midnight) — and whether and when they were paid since.
   const carries = await carriesOnDays(q, branchId, [day]);
   const carriedRows = [];
   if (carries.length) {
     const sess = await q
-      .select({ id: sessions.id, label: sessions.label, startedAt: sessions.startedAt, stationName: stations.name })
+      .select({ id: sessions.id, label: sessions.label, startedAt: sessions.startedAt, status: sessions.status, billId: sessions.billId, closedAt: sessions.closedAt, stationName: stations.name })
       .from(sessions)
       .leftJoin(stations, eq(stations.id, sessions.stationId))
       .where(inArray(sessions.id, carries.map((c) => c.sessionId)));
     const byId = new Map(sess.map((x) => [x.id, x]));
+    const billIds = sess.map((x) => x.billId).filter((x): x is string => !!x);
+    const [billRows2, billPays] = billIds.length
+      ? await Promise.all([
+          q.select({ id: bills.id, total: bills.total }).from(bills).where(inArray(bills.id, billIds)),
+          q.select({ billId: payments.billId, method: payments.method, amount: payments.amount }).from(payments).where(inArray(payments.billId, billIds)),
+        ])
+      : [[], []];
+    const billOf = new Map(billRows2.map((b) => [b.id, b]));
+    const until = await dayEnd(q, branchId, day);
     for (const c of carries) {
       const x = byId.get(c.sessionId);
+      const bill = x?.billId ? billOf.get(x.billId) : undefined;
       carriedRows.push({
         billId: c.id,
         number: 0,
         stationName: x?.stationName ?? null,
         label: x?.label ?? null,
         startedAt: x?.startedAt.getTime() ?? null,
-        endedAt: null,
+        // A negative share is a void giving back what an earlier day counted: no time range.
+        endedAt: c.time + c.items >= 0 ? until : null,
         playedMs: c.ms,
         timeCharge: c.time,
         items: [] as { name: string; qty: number }[],
@@ -98,10 +115,24 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
         carriedOutTime: 0,
         carriedOutItems: 0,
         carried: true,
+        /** When the session was paid (on a later day, in that day's shift), with the whole bill. */
+        paidAt: bill ? (x?.closedAt?.getTime() ?? null) : null,
+        billTotal: bill?.total ?? null,
+        billPaidByMethod: bill ? byMethod(billPays.filter((p) => p.billId === bill.id)) : null,
+        voided: x?.status === 'void',
       });
     }
   }
   return [...billRows, ...carriedRows];
+}
+
+/** When a closed business day ended: the cutoff itself for an automatic close (even if noticed later). */
+async function dayEnd(q: Q, branchId: string, day: string): Promise<number | null> {
+  const [row] = await q.select().from(businessDays).where(and(eq(businessDays.branchId, branchId), eq(businessDays.day, day)));
+  if (!row?.closedAt) return null;
+  if (!row.auto) return row.closedAt.getTime();
+  const branch = await getBranch(q, branchId);
+  return Math.min(row.closedAt.getTime(), businessDayRange(day, branch.timezone, branch.settings.day.cutoff).end);
 }
 
 /** Monthly: one row per business day with what came in, plus month totals. `month` = "YYYY-MM". */

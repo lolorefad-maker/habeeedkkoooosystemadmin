@@ -240,11 +240,23 @@ function RowName({ r, inline }: { r: Row; inline?: boolean }) {
 /** Why a row shows only part of a session: the day ended while it was playing. */
 function SplitNote({ r }: { r: Row }) {
   const { t } = useT();
+  const f = useFmt();
   const out = (r.carriedOutTime ?? 0) + (r.carriedOutItems ?? 0);
   if (r.carried) {
     return (
-      <div className="mt-0.5 flex items-center gap-1 text-xs text-st-reserved">
-        <MoonStar className="size-3" /> {t('ledger.carriedRow')}
+      <div className="mt-0.5 flex flex-col gap-0.5 text-xs">
+        <span className="flex items-center gap-1 text-st-reserved">
+          <MoonStar className="size-3" /> {r.voided ? t('ledger.carriedVoid') : t('ledger.carriedRow', { time: r.endedAt ? f.time(r.endedAt) : '…' })}
+        </span>
+        {!r.voided &&
+          (r.paidAt ? (
+            <span className="flex flex-wrap items-center gap-1 text-st-free">
+              {t('ledger.carriedPaid', { time: f.time(r.paidAt) })} <Money value={r.billTotal ?? 0} />
+              {r.billPaidByMethod && <PaidChips paid={r.billPaidByMethod} />}
+            </span>
+          ) : (
+            <span className="text-st-ending">{t('ledger.carriedUnpaid')}</span>
+          ))}
       </div>
     );
   }

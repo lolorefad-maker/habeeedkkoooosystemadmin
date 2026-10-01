@@ -1,7 +1,7 @@
 import { parseMoney } from '@lounge/core';
 import { clsx } from 'clsx';
 import { Banknote, CreditCard, Wallet } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useT } from '../../i18n';
 import { post } from '../../lib/api';
 import { can, useAuth } from '../../lib/auth';
@@ -20,6 +20,7 @@ export function ShiftPill() {
   const floor = useFloor();
   const [open, setOpen] = useState(false);
   const shift = floor.data?.shift ?? null;
+  const uncounted = floor.data?.uncountedShifts ?? [];
   if (!can.shift(role) || !floor.data) return null;
 
   return (
@@ -34,6 +35,8 @@ export function ShiftPill() {
         <Wallet className="size-3.5" />
         <span className="hidden sm:inline">{shift ? t('shift.title') : t('shift.none')}</span>
         {shift && <Money value={shift.expectedCash} className="hidden lg:inline-flex" />}
+        {/* A drawer closed at midnight still waits to be counted. */}
+        {uncounted.length > 0 && <span className="size-2 rounded-full bg-st-ending" aria-label={t('shift.oldUncountedShort')} />}
       </button>
       <ShiftDialog open={open} onOpenChange={setOpen} />
     </>
@@ -84,6 +87,9 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
       }
     >
       <div className="flex flex-col gap-4">
+        {(floor.data?.uncountedShifts ?? []).map((s) => (
+          <CountOldShift key={s.id} s={s} />
+        ))}
         {shift && (
           <div className="rounded-card bg-surface-2 p-4">
             <div className="mb-2 text-xs font-medium text-faint">{t('shift.byMethod')}</div>
@@ -125,5 +131,59 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
         )}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Count, afterwards, the drawer of a shift that closed by itself at the day's end (midnight): its
+ * cash stayed its own when the new shift started from zero. Once saved, the ledger shows the result.
+ */
+export function CountOldShift({ s, onDone }: { s: { id: string; userName: string; expectedCash: number | null; closedAt: number | null }; onDone?: () => void }) {
+  const { t } = useT();
+  const f = useFmt();
+  const { busy, run } = useAction();
+  const [amount, setAmount] = useState('');
+  const fieldId = useId();
+  const minor = amount.trim() ? parseMoney(amount, f.decimals) : null;
+  const expected = s.expectedCash ?? 0;
+  const variance = minor != null ? minor - expected : null;
+
+  const save = async () => {
+    if (minor == null) return;
+    const ok = await run(() => post(`/api/shifts/${s.id}/count`, { countedCash: minor }), { success: t('shift.countSaved') });
+    if (ok) {
+      setAmount('');
+      onDone?.();
+    }
+  };
+
+  return (
+    <div data-status="ending" className="tint flex flex-col gap-2.5 rounded-card border p-3.5">
+      <div className="text-sm font-semibold">{t('shift.oldUncounted', { name: s.userName, time: s.closedAt ? f.time(s.closedAt) : '…' })}</div>
+      <div className="flex items-center justify-between text-xs text-muted">
+        <span>{t('shift.expected')}</span>
+        <Money value={expected} currency className="font-semibold text-fg" />
+      </div>
+      <div className="flex gap-2">
+        <Input
+          id={fieldId}
+          inputMode="decimal"
+          aria-label={t('shift.counted')}
+          className="num text-center text-lg"
+          placeholder={f.money(expected)}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <Button variant="primary" className="shrink-0" loading={busy} disabled={minor == null} onClick={save}>
+          {t('shift.countSave')}
+        </Button>
+      </div>
+      {variance != null && (
+        <div data-status={variance === 0 ? 'free' : variance < 0 ? 'overtime' : 'ending'} className="st-soft flex items-center justify-between rounded-control px-3 py-2 text-sm font-semibold">
+          <span>{variance === 0 ? t('shift.balanced') : variance < 0 ? t('shift.short') : t('shift.over')}</span>
+          <Money value={Math.abs(variance)} currency />
+        </div>
+      )}
+    </div>
   );
 }

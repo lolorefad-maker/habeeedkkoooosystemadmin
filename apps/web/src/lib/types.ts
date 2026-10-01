@@ -111,6 +111,8 @@ export interface Floor {
   branch: BranchInfo;
   shift: Shift | null;
   stations: Station[];
+  /** Drawers the day's end closed by itself (midnight) that nobody counted yet. */
+  uncountedShifts?: { id: string; userName: string; businessDay: string; closedAt: number | null; expectedCash: number }[];
   /** Deleted stations (id + name only), so old bookings still name their station. */
   archivedStations?: { id: string; name: string }[];
   rules: RawRule[];
@@ -170,6 +172,11 @@ export interface LedgerRow {
   carriedOutItems?: number;
   /** Not a bill: this day's share of a session still open when the day ended. */
   carried?: boolean;
+  /** For a carried share: when its session was paid (on a later day), the whole bill and how. */
+  paidAt?: number | null;
+  billTotal?: number | null;
+  billPaidByMethod?: Record<string, number> | null;
+  voided?: boolean;
 }
 
 export interface MonthDay {

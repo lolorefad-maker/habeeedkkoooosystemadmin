@@ -1,18 +1,22 @@
 import { DomainError } from '@lounge/core';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext, type Record_ } from '../context';
 import type { Q } from '../db';
 import { payments, shifts, users } from '../db/schema';
 import type { Actor } from '../lib/auth';
+import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { currentDay, getBranch, openShift } from './common';
 
 export const openShiftInput = z.object({ openingFloat: z.number().int().min(0) });
-export const closeShiftInput = z.object({
-  countedCash: z.number().int().min(0),
-  note: z.string().trim().max(300).nullish(),
-});
+function closeShiftInputBase() {
+  return z.object({
+    countedCash: z.number().int().min(0),
+    note: z.string().trim().max(300).nullish(),
+  });
+}
+export const closeShiftInput = closeShiftInputBase();
 
 /** Cash the drawer should hold: opening float + every cash movement during the shift. */
 export async function shiftSummary(q: Q, shiftId: string) {
@@ -34,6 +38,18 @@ export async function shiftSummary(q: Q, shiftId: string) {
     transactions: rows.length,
     expectedCash: s.openingFloat + (byMethod.cash ?? 0),
   };
+}
+
+/** Shifts the day's end closed by itself whose drawer nobody has counted yet (newest first). */
+export async function uncountedShifts(q: Q, branchId: string) {
+  const rows = await q
+    .select({ id: shifts.id, userId: shifts.userId, businessDay: shifts.businessDay, closedAt: shifts.closedAt, expectedCash: shifts.expectedCash, userName: users.name })
+    .from(shifts)
+    .leftJoin(users, eq(users.id, shifts.userId))
+    .where(and(eq(shifts.branchId, branchId), eq(shifts.status, 'closed'), isNull(shifts.countedCash), isNull(shifts.closedBy)))
+    .orderBy(desc(shifts.closedAt))
+    .limit(5);
+  return rows.map((r) => ({ id: r.id, userName: r.userName ?? '', businessDay: r.businessDay, closedAt: r.closedAt?.getTime() ?? null, expectedCash: r.expectedCash ?? 0 }));
 }
 
 export async function currentShift(q: Q, branchId: string) {
@@ -68,9 +84,9 @@ export async function endShift(ctx: AppContext, actor: Actor, raw: unknown) {
 }
 
 /**
- * The day ended by itself (midnight) with a shift open: close it without a count — nobody counted —
- * and hand the drawer to a new shift on the new day that starts with the cash that is in it. The
- * cashier can count and close that shift whenever they like.
+ * The day ended by itself (midnight) with a shift open: close it without a count — nobody was asked
+ * to count — and open the new day's shift from zero. The old shift's cash is its own: count it later
+ * with `countClosedShift` (the ledger shows "count the drawer" next to it).
  */
 export async function rollShiftAtDayEnd(tx: Q, record: Record_, branchId: string, nextDay: string, now: number) {
   const s = await openShift(tx, branchId);
@@ -89,10 +105,34 @@ export async function rollShiftAtDayEnd(tx: Q, record: Record_, branchId: string
     businessDay: nextDay,
     status: 'open',
     openedAt: new Date(now),
-    openingFloat: summary.expectedCash,
+    openingFloat: 0,
   });
-  await record({ type: 'shift.opened', entity: 'shift', entityId: id, payload: { openingFloat: summary.expectedCash, auto: true, from: s.id } });
-  return { closed: s.id, opened: id, carriedCash: summary.expectedCash };
+  await record({ type: 'shift.opened', entity: 'shift', entityId: id, payload: { openingFloat: 0, auto: true, after: s.id } });
+  return { closed: s.id, opened: id };
+}
+
+export const countShiftInput = closeShiftInputBase();
+
+/**
+ * Count, afterwards, the drawer of a shift that closed by itself at the day's end ("we counted the
+ * old shift's cash: 34.500"). Once only — a shift counted by hand cannot be recounted here.
+ */
+export async function countClosedShift(ctx: AppContext, actor: Actor, shiftId: string, raw: unknown) {
+  const input = countShiftInput.parse(raw);
+  return mutate(ctx, actor, async (tx, record) => {
+    const [s] = await tx.select().from(shifts).where(and(eq(shifts.id, shiftId), eq(shifts.branchId, actor.branchId)));
+    if (!s) throw notFound('shift');
+    if (s.status !== 'closed') throw new DomainError('shift_not_closed', 'This shift is still open — close it with a count instead');
+    if (s.countedCash != null) throw new DomainError('shift_already_counted', 'This shift was already counted');
+    const expected = s.expectedCash ?? (await shiftSummary(tx, s.id))!.expectedCash;
+    const variance = input.countedCash - expected;
+    await tx
+      .update(shifts)
+      .set({ countedCash: input.countedCash, variance, expectedCash: expected, note: input.note ?? s.note })
+      .where(and(eq(shifts.id, s.id), isNull(shifts.countedCash)));
+    await record({ type: 'shift.counted', entity: 'shift', entityId: s.id, payload: { expectedCash: expected, countedCash: input.countedCash, variance }, reason: input.note ?? null });
+    return { id: s.id, expectedCash: expected, countedCash: input.countedCash, variance };
+  });
 }
 
 /** Count the drawer and close the open shift, inside the caller's transaction (also used by "end the day"). */

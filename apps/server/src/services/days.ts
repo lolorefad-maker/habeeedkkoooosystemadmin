@@ -207,9 +207,7 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
     }
   }
 
-  const userIds = [...new Set(dayShifts.map((s) => s.userId))];
-  const names = userIds.length ? await q.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds)) : [];
-  const nameOf = new Map(names.map((u) => [u.id, u.name]));
+  const shiftRows = await shiftsOfDay(q, dayShifts);
 
   const productNames = counts.length
     ? await q.select({ id: products.id, name: products.name, qty: products.stockQty }).from(products).where(inArray(products.id, counts.map((c) => c.productId)))
@@ -239,23 +237,31 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
       fees: dayRes.reduce((s, r) => s + r.fee, 0),
     },
     openSessions: { count: open.length, runningValue },
-    shifts: dayShifts.map((s) => ({
-      id: s.id,
-      userName: nameOf.get(s.userId) ?? '',
-      openedAt: s.openedAt.getTime(),
-      closedAt: s.closedAt?.getTime() ?? null,
-      openingFloat: s.openingFloat,
-      expectedCash: s.expectedCash,
-      countedCash: s.countedCash,
-      variance: s.variance,
-      auto: !!s.closedAt && !s.closedBy,
-    })),
+    shifts: shiftRows,
     stock: counts.map((c) => {
       const p = productMap.get(c.productId);
       const counted = p?.qty ?? 0;
       return { productId: c.productId, name: p?.name ?? '?', expected: counted - c.delta, counted, variance: c.delta };
     }),
   };
+}
+
+/** The day's cash-drawer shifts as the report shows them (live: a drawer counted later shows its count). */
+async function shiftsOfDay(q: Q, dayShifts: (typeof shifts.$inferSelect)[]): Promise<DayReport['shifts']> {
+  const userIds = [...new Set(dayShifts.map((s) => s.userId))];
+  const names = userIds.length ? await q.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds)) : [];
+  const nameOf = new Map(names.map((u) => [u.id, u.name]));
+  return dayShifts.map((s) => ({
+    id: s.id,
+    userName: nameOf.get(s.userId) ?? '',
+    openedAt: s.openedAt.getTime(),
+    closedAt: s.closedAt?.getTime() ?? null,
+    openingFloat: s.openingFloat,
+    expectedCash: s.expectedCash,
+    countedCash: s.countedCash,
+    variance: s.variance,
+    auto: !!s.closedAt && !s.closedBy,
+  }));
 }
 
 const nextDay = (day: string) => DateTime.fromISO(day).plus({ days: 1 }).toISODate()!;
@@ -359,7 +365,12 @@ export async function dayReport(q: Q, branchId: string, day: string | null, now:
   const target = day ?? (await currentDay(q, branch, now));
   const row = await getDayRow(q, branchId, target);
   if (!row) throw notFound('business day');
-  if (row.status === 'closed' && row.report) return row.report as unknown as DayReport;
+  if (row.status === 'closed' && row.report) {
+    // The saved report is the day as it closed; only its drawers stay live (a drawer counted later).
+    const saved = row.report as unknown as DayReport;
+    const dayShifts = await q.select().from(shifts).where(and(eq(shifts.branchId, branchId), eq(shifts.businessDay, target)));
+    return { ...saved, shifts: await shiftsOfDay(q, dayShifts) };
+  }
   return buildDayReport(q, branch, target, now);
 }
 

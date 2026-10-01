@@ -24,6 +24,8 @@ import { can, useAuth } from '../../lib/auth';
 import { useFmt } from '../../lib/format';
 import { useDayReport, useDays } from '../../lib/queries';
 import { DailyLog } from './DailyLog';
+import { CountOldShift } from '../../components/shell/ShiftPill';
+import { Modal } from '../../components/ui/overlays';
 import { EndDayDialog } from './EndDay';
 import { MonthlyTab } from './MonthlyTab';
 import { RangeTab } from './RangeTab';
@@ -260,6 +262,9 @@ function ReportView({ r }: { r: DayReport }) {
   const { t, tk } = useT();
   const f = useFmt();
   const [more, setMore] = useState(false);
+  const role = useAuth((s) => s.user?.role);
+  // A drawer the day's end closed by itself: counted from here afterwards.
+  const [counting, setCounting] = useState<DayReport['shifts'][number] | null>(null);
   const maxStation = Math.max(1, ...r.stations.map((s) => s.amount));
 
   return (
@@ -351,13 +356,23 @@ function ReportView({ r }: { r: DayReport }) {
                       {s.variance === 0 ? t('shift.balanced') : s.variance < 0 ? t('shift.short') : t('shift.over')} {s.variance !== 0 && <Money value={Math.abs(s.variance)} />}
                     </span>
                   ) : s.auto ? (
-                    <span className="max-w-[55%] text-end text-xs text-faint">{t('reports.autoShift')}</span>
+                    <span className="flex max-w-[60%] flex-col items-end gap-1 text-end text-xs text-faint">
+                      {t('reports.autoShift', { time: s.closedAt ? f.time(s.closedAt) : '…' })}
+                      {can.shift(role) && (
+                        <Button size="sm" variant="warning" onClick={() => setCounting(s)}>
+                          {t('reports.countShift')}
+                        </Button>
+                      )}
+                    </span>
                   ) : (
                     <span className="text-xs text-faint">{t('reports.open')}</span>
                   )}
                 </div>
               ))
             )}
+            <Modal open={!!counting} onOpenChange={(o) => !o && setCounting(null)} title={t('reports.countShift')} size="sm">
+              {counting && <CountOldShift s={counting} onDone={() => setCounting(null)} />}
+            </Modal>
           </Card>
         </div>
 

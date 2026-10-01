@@ -76,6 +76,15 @@ describe('a session across midnight', () => {
     const row = (await log('2026-10-07')).find((r) => !r.carried && r.total === 12750);
     expect(row.carriedOutTime + row.carriedOutItems).toBe(6750);
 
+    // The day before shows the 9 pm → midnight part, and that it was paid at 3 am.
+    const before = (await log('2026-10-06')).find((r) => r.carried && r.total === 6750);
+    expect(before.startedAt).toBe(Date.parse('2026-10-06T21:00:00+03:00'));
+    expect(before.endedAt).toBe(Date.parse('2026-10-07T00:00:00+03:00'));
+    expect(before.playedMs).toBe(3 * 3_600_000);
+    expect(before.paidAt).toBe(Date.parse('2026-10-07T03:00:00+03:00'));
+    expect(before.billTotal).toBe(12750);
+    expect(before.billPaidByMethod).toEqual({ cash: 12750 });
+
     const month = (await h.api('GET', '/api/reports/month?month=2026-10', undefined, h.tokens.manager)).json;
     const m6 = month.days.find((d: Json) => d.day === '2026-10-06');
     const m7 = month.days.find((d: Json) => d.day === '2026-10-07');
@@ -83,18 +92,26 @@ describe('a session across midnight', () => {
     expect(m7.total).toBe(6000);
   });
 
-  it('the shift rolled over at midnight: closed uncounted, the drawer carried into a new one', async () => {
+  it('the shift rolled over at midnight: the old one closed uncounted, the new one started from zero', async () => {
     const d1 = await report('2026-10-06');
     expect(d1.shifts).toHaveLength(1);
     expect(d1.shifts[0]).toMatchObject({ auto: true, countedCash: null, expectedCash: 20000 });
     const cur = (await h.api('GET', '/api/shifts/current', undefined, h.tokens.cashier)).json.shift;
     expect(cur.businessDay).toBe('2026-10-07');
-    expect(cur.openingFloat).toBe(20000);
-    expect(cur.expectedCash).toBe(20000 + 12750);
-    // The cashier can still count and close it by hand.
-    const closed = await h.api('POST', '/api/shifts/close', { countedCash: 32750 }, h.tokens.cashier);
+    expect(cur.openingFloat).toBe(0);
+    expect(cur.expectedCash).toBe(12750); // only what it took: the 3 am payment
+
+    // The old drawer is counted afterwards (once), and the closed day shows it.
+    expect((await h.api('POST', `/api/shifts/${cur.id}/count`, { countedCash: 1 }, h.tokens.cashier)).json.code).toBe('shift_not_closed');
+    const counted = await h.api('POST', `/api/shifts/${d1.shifts[0].id}/count`, { countedCash: 19500, note: 'ناقص نص دينار' }, h.tokens.cashier);
+    expect(counted.json).toMatchObject({ expectedCash: 20000, countedCash: 19500, variance: -500 });
+    expect((await h.api('POST', `/api/shifts/${d1.shifts[0].id}/count`, { countedCash: 20000 }, h.tokens.cashier)).json.code).toBe('shift_already_counted');
+    expect((await report('2026-10-06')).shifts[0]).toMatchObject({ auto: true, countedCash: 19500, variance: -500 });
+
+    // The cashier closes the new shift by hand as usual.
+    const closed = await h.api('POST', '/api/shifts/close', { countedCash: 12750 }, h.tokens.cashier);
     expect(closed.json.variance).toBe(0);
-    expect((await h.api('POST', '/api/shifts/open', { openingFloat: 32750 }, h.tokens.cashier)).status).toBe(200);
+    expect((await h.api('POST', '/api/shifts/open', { openingFloat: 0 }, h.tokens.cashier)).status).toBe(200);
   });
 
   it('a voided session gives back on the new day what the old day counted', async () => {
