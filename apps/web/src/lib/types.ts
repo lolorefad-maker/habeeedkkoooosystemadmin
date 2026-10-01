@@ -188,6 +188,14 @@ export interface MonthReport {
   totals: Omit<MonthDay, 'day'>;
 }
 
+/** "From day to day": the same rows and totals for any period. */
+export interface RangeReport {
+  from: string;
+  to: string;
+  days: MonthDay[];
+  totals: Omit<MonthDay, 'day'>;
+}
+
 export interface OrderItem {
   id: string;
   orderId: string;

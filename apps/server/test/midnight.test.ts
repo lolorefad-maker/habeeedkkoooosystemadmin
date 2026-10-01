@@ -143,3 +143,23 @@ describe('cafeteria', () => {
     expect(after.stockQty).toBe(chips.stockQty);
   });
 });
+
+describe('ledger: any period, from day to day', () => {
+  it('adds up the days it covers, the same as each day on its own', async () => {
+    const [d6, d7] = [await report('2026-10-06'), await report('2026-10-07')];
+    const r = (await h.api('GET', '/api/reports/range?from=2026-10-06&to=2026-10-07', undefined, h.tokens.manager)).json as Json;
+    expect(r.days.map((d: Json) => d.day)).toEqual(['2026-10-06', '2026-10-07']);
+    expect(r.totals.total).toBe(d6.revenue.total + d7.revenue.total);
+    expect(r.totals.received.cash ?? 0).toBe((d6.payments.byMethod.cash ?? 0) + (d7.payments.byMethod.cash ?? 0));
+    expect(r.totals.received.card ?? 0).toBe((d6.payments.byMethod.card ?? 0) + (d7.payments.byMethod.card ?? 0));
+    // One day on its own is a period too.
+    const one = (await h.api('GET', '/api/reports/range?from=2026-10-07&to=2026-10-07', undefined, h.tokens.manager)).json as Json;
+    expect(one.totals.total).toBe(d7.revenue.total);
+  });
+
+  it('refuses a period that ends before it starts or is longer than a year; cashiers cannot see it', async () => {
+    expect((await h.api('GET', '/api/reports/range?from=2026-10-07&to=2026-10-06', undefined, h.tokens.manager)).json.code).toBe('invalid_range');
+    expect((await h.api('GET', '/api/reports/range?from=2025-01-01&to=2026-10-07', undefined, h.tokens.manager)).json.code).toBe('range_too_long');
+    expect((await h.api('GET', '/api/reports/range?from=2026-10-01&to=2026-10-07', undefined, h.tokens.cashier)).status).toBe(403);
+  });
+});

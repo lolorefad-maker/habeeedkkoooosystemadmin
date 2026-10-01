@@ -1,4 +1,4 @@
-import type { TimeBill } from '@lounge/core';
+import { DomainError, type TimeBill } from '@lounge/core';
 import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { Q } from '../db';
@@ -108,10 +108,26 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
 export async function monthReport(q: Q, branchId: string, month: string) {
   const start = DateTime.fromISO(`${month}-01`);
   if (!start.isValid) throw new Error('Invalid month');
-  const from = start.toISODate()!;
-  const to = start.plus({ months: 1 }).toISODate()!;
+  const report = await rangeReport(q, branchId, start.toISODate()!, start.endOf('month').toISODate()!);
+  return { month, days: report.days, totals: report.totals };
+}
 
-  const [monthBills, monthPayments] = await Promise.all([
+/** Longest period one report covers. */
+export const MAX_RANGE_DAYS = 366;
+
+/**
+ * Any period, "from the 1st to the 15th": one row per business day with what came in, and the
+ * period's totals. `from` and `to` are business days (YYYY-MM-DD), both included.
+ */
+export async function rangeReport(q: Q, branchId: string, from: string, to: string) {
+  const start = DateTime.fromISO(from);
+  const end = DateTime.fromISO(to);
+  if (!start.isValid || !end.isValid) throw new DomainError('invalid_range', 'Invalid dates');
+  if (end < start) throw new DomainError('invalid_range', 'The period ends before it starts');
+  if (end.diff(start, 'days').days + 1 > MAX_RANGE_DAYS) throw new DomainError('range_too_long', 'Pick a period of at most a year');
+  const until = end.plus({ days: 1 }).toISODate()!;
+
+  const [rangeBills, rangePayments] = await Promise.all([
     q
       .select({
         sessionId: bills.sessionId,
@@ -122,11 +138,11 @@ export async function monthReport(q: Q, branchId: string, month: string) {
         total: bills.total,
       })
       .from(bills)
-      .where(and(eq(bills.branchId, branchId), eq(bills.status, 'paid'), gte(bills.businessDay, from), lt(bills.businessDay, to))),
+      .where(and(eq(bills.branchId, branchId), eq(bills.status, 'paid'), gte(bills.businessDay, from), lt(bills.businessDay, until))),
     q
       .select({ day: payments.businessDay, method: payments.method, amount: payments.amount })
       .from(payments)
-      .where(and(eq(payments.branchId, branchId), gte(payments.businessDay, from), lt(payments.businessDay, to))),
+      .where(and(eq(payments.branchId, branchId), gte(payments.businessDay, from), lt(payments.businessDay, until))),
   ]);
 
   type Row = { day: string; sessions: number; time: number; items: number; discounts: number; total: number; received: Record<string, number> };
@@ -139,7 +155,7 @@ export async function monthReport(q: Q, branchId: string, month: string) {
     }
     return r;
   };
-  for (const b of monthBills) {
+  for (const b of rangeBills) {
     const r = row(b.day);
     r.sessions++;
     r.time += b.timeCharge;
@@ -147,13 +163,13 @@ export async function monthReport(q: Q, branchId: string, month: string) {
     r.discounts += b.discount;
     r.total += b.total;
   }
-  for (const p of monthPayments) {
+  for (const p of rangePayments) {
     const r = row(p.day);
     r.received[p.method] = (r.received[p.method] ?? 0) + p.amount;
   }
   // A session that ran past a day's end: its share goes to that day, the bill's day keeps the rest.
-  const earlier = await carriedSoFar(q, monthBills.map((b) => b.sessionId).filter((x): x is string => !!x));
-  for (const b of monthBills) {
+  const earlier = await carriedSoFar(q, rangeBills.map((b) => b.sessionId).filter((x): x is string => !!x));
+  for (const b of rangeBills) {
     const c = b.sessionId ? earlier.get(b.sessionId) : undefined;
     if (!c) continue;
     const r = row(b.day);
@@ -161,9 +177,9 @@ export async function monthReport(q: Q, branchId: string, month: string) {
     r.items -= c.items;
     r.total -= c.time + c.items;
   }
-  const monthDays: string[] = [];
-  for (let d = start; d < start.plus({ months: 1 }); d = d.plus({ days: 1 })) monthDays.push(d.toISODate()!);
-  for (const c of await carriesOnDays(q, branchId, monthDays)) {
+  const rangeDays: string[] = [];
+  for (let d = start; d <= end; d = d.plus({ days: 1 })) rangeDays.push(d.toISODate()!);
+  for (const c of await carriesOnDays(q, branchId, rangeDays)) {
     const r = row(c.businessDay);
     r.time += c.time;
     r.items += c.items;
@@ -183,5 +199,5 @@ export async function monthReport(q: Q, branchId: string, month: string) {
     },
     { sessions: 0, time: 0, items: 0, discounts: 0, total: 0, received: {} as Record<string, number> },
   );
-  return { month, days: list, totals };
+  return { from, to, days: list, totals };
 }

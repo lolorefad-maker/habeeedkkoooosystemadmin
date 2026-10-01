@@ -26,7 +26,7 @@ import { checkoutSession, counterSale, getBill } from './services/checkout';
 import { getBranch, getSession } from './services/common';
 import { closeDay, dayReport, listDays } from './services/days';
 import { floorSnapshot } from './services/floor';
-import { monthReport, sessionsLog } from './services/ledger';
+import { monthReport, rangeReport, sessionsLog } from './services/ledger';
 import { exportSetup, importSetup } from './services/setup';
 import { adjustStock, listMovements, listStock, receiveStock } from './services/stock';
 import { createOrder, voidOrderItem } from './services/orders';
@@ -298,6 +298,14 @@ export async function buildApp(ctx: AppContext) {
     route('reports.view', async (req, actor) => {
       const { month } = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(req.query);
       return monthReport(ctx.db, actor.branchId, month);
+    }),
+  );
+  // Any period, "from day to day": per-day rows and the period's totals.
+  app.get(
+    '/api/reports/range',
+    route('reports.view', async (req, actor) => {
+      const { from, to } = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+      return rangeReport(ctx.db, actor.branchId, from, to);
     }),
   );
 

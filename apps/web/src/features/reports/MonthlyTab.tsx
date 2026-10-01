@@ -99,52 +99,70 @@ export function MonthlyTab({ month, onMonth, onPickDay }: { month: string; onMon
           </Card>
 
           {/* Table view: every number reachable without hovering */}
-          <Card className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-line bg-surface-2 text-xs text-faint">
-                <tr>
-                  <th className="px-4 py-2.5 text-start font-medium">{t('ledger.day')}</th>
-                  <th className="px-4 py-2.5 text-end font-medium">{t('ledger.sessions')}</th>
-                  <th className="px-4 py-2.5 text-end font-medium">{t('ledger.time')}</th>
-                  <th className="px-4 py-2.5 text-end font-medium">{t('ledger.drinks')}</th>
-                  <th className="px-4 py-2.5 text-end font-medium">{t('ledger.total')}</th>
-                  <th className="px-4 py-2.5 text-end font-medium">{t('checkout.cash')}</th>
-                  <th className="px-4 py-2.5 text-end font-medium">{t('checkout.card')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {withData.map((d) => (
-                  <tr key={d.day} onClick={() => onPickDay(d.day)} className="cursor-pointer border-b border-line/70 hover:bg-surface-2">
-                    <td className="px-4 py-2.5 font-medium">{dayName(d.day)}</td>
-                    <td className="num px-4 py-2.5 text-end">{d.sessions}</td>
-                    <td className="px-4 py-2.5 text-end"><Money value={d.time} className="justify-end" /></td>
-                    <td className="px-4 py-2.5 text-end"><Money value={d.items} className="justify-end" /></td>
-                    <td className="px-4 py-2.5 text-end font-semibold"><Money value={d.total} className="justify-end" /></td>
-                    <td className="px-4 py-2.5 text-end text-muted"><Money value={d.received.cash ?? 0} className="justify-end" /></td>
-                    <td className="px-4 py-2.5 text-end text-muted"><Money value={d.received.card ?? 0} className="justify-end" /></td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-surface-2 font-semibold">
-                <tr>
-                  <td className="px-4 py-3">{t('common.total')}</td>
-                  <td className="num px-4 py-3 text-end">{totals!.sessions}</td>
-                  <td className="px-4 py-3 text-end"><Money value={totals!.time} className="justify-end" /></td>
-                  <td className="px-4 py-3 text-end"><Money value={totals!.items} className="justify-end" /></td>
-                  <td className="px-4 py-3 text-end"><Money value={totals!.total} currency className="justify-end" /></td>
-                  <td className="px-4 py-3 text-end"><Money value={totals!.received.cash ?? 0} className="justify-end" /></td>
-                  <td className="px-4 py-3 text-end"><Money value={totals!.received.card ?? 0} className="justify-end" /></td>
-                </tr>
-              </tfoot>
-            </table>
-          </Card>
+          <DaysTable days={withData} totals={totals!} onPickDay={onPickDay} dayName={dayName} />
         </>
       )}
     </div>
   );
 }
 
-function Tile({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string }) {
+/** One row per business day (tap one to open it), with the totals underneath. Shared by month and period. */
+export function DaysTable({
+  days,
+  totals,
+  onPickDay,
+  dayName,
+}: {
+  days: MonthDay[];
+  totals: Omit<MonthDay, 'day'>;
+  onPickDay: (day: string) => void;
+  dayName: (iso: string) => string;
+}) {
+  const { t } = useT();
+  return (
+    <Card className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-b border-line bg-surface-2 text-xs text-faint">
+          <tr>
+            <th className="px-4 py-2.5 text-start font-medium">{t('ledger.day')}</th>
+            <th className="px-4 py-2.5 text-end font-medium">{t('ledger.sessions')}</th>
+            <th className="px-4 py-2.5 text-end font-medium">{t('ledger.time')}</th>
+            <th className="px-4 py-2.5 text-end font-medium">{t('ledger.drinks')}</th>
+            <th className="px-4 py-2.5 text-end font-medium">{t('ledger.total')}</th>
+            <th className="px-4 py-2.5 text-end font-medium">{t('checkout.cash')}</th>
+            <th className="px-4 py-2.5 text-end font-medium">{t('checkout.card')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d) => (
+            <tr key={d.day} onClick={() => onPickDay(d.day)} className="cursor-pointer border-b border-line/70 hover:bg-surface-2">
+              <td className="whitespace-nowrap px-4 py-2.5 font-medium">{dayName(d.day)}</td>
+              <td className="num px-4 py-2.5 text-end">{d.sessions}</td>
+              <td className="px-4 py-2.5 text-end"><Money value={d.time} className="justify-end" /></td>
+              <td className="px-4 py-2.5 text-end"><Money value={d.items} className="justify-end" /></td>
+              <td className="px-4 py-2.5 text-end font-semibold"><Money value={d.total} className="justify-end" /></td>
+              <td className="px-4 py-2.5 text-end text-muted"><Money value={d.received.cash ?? 0} className="justify-end" /></td>
+              <td className="px-4 py-2.5 text-end text-muted"><Money value={d.received.card ?? 0} className="justify-end" /></td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-surface-2 font-semibold">
+          <tr>
+            <td className="px-4 py-3">{t('common.total')}</td>
+            <td className="num px-4 py-3 text-end">{totals.sessions}</td>
+            <td className="px-4 py-3 text-end"><Money value={totals.time} className="justify-end" /></td>
+            <td className="px-4 py-3 text-end"><Money value={totals.items} className="justify-end" /></td>
+            <td className="px-4 py-3 text-end"><Money value={totals.total} currency className="justify-end" /></td>
+            <td className="px-4 py-3 text-end"><Money value={totals.received.cash ?? 0} className="justify-end" /></td>
+            <td className="px-4 py-3 text-end"><Money value={totals.received.card ?? 0} className="justify-end" /></td>
+          </tr>
+        </tfoot>
+      </table>
+    </Card>
+  );
+}
+
+export function Tile({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string }) {
   return (
     <Card className="p-5">
       <div className="flex items-center gap-2 text-sm text-muted [&_svg]:size-4">

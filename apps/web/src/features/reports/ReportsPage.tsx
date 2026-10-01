@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   CalendarDays,
   CalendarRange,
+  CalendarSearch,
   ChevronDown,
   Coffee,
   CreditCard,
@@ -25,12 +26,14 @@ import { useDayReport, useDays } from '../../lib/queries';
 import { DailyLog } from './DailyLog';
 import { EndDayDialog } from './EndDay';
 import { MonthlyTab } from './MonthlyTab';
+import { RangeTab } from './RangeTab';
 import { Stepper } from './Stepper';
 
-type Tab = 'daily' | 'monthly';
+type Tab = 'daily' | 'monthly' | 'range';
 const TABS: { id: Tab; label: TKey; icon: typeof Receipt }[] = [
   { id: 'daily', label: 'ledger.daily', icon: CalendarDays },
   { id: 'monthly', label: 'ledger.monthly', icon: CalendarRange },
+  { id: 'range', label: 'ledger.range', icon: CalendarSearch },
 ];
 
 /** The ledger ("الجرد"): daily device log + Z report, monthly totals per day, and goods stock. */
@@ -79,6 +82,9 @@ export function ReportsPage() {
         />
       )}
       {tab === 'monthly' && <MonthlyTab month={month} onMonth={(m) => go({ month: m })} onPickDay={(d) => go({ tab: 'daily', day: d })} />}
+      {tab === 'range' && (
+        <RangeTab from={params.get('from')} to={params.get('to')} onRange={(from, to) => go({ from, to })} onPickDay={(d) => go({ tab: 'daily', day: d })} />
+      )}
     </div>
   );
 }

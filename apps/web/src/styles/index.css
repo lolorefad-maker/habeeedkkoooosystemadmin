@@ -125,6 +125,13 @@
   body,
   #root {
     height: 100%;
+    /* Installed as an app (home screen / WebView): no rubber-band bounce or pull-to-reload of the whole page. */
+    overscroll-behavior: none;
+  }
+
+  /* As an installed app the page reaches under the phone's status bar: keep the content below it. */
+  #root {
+    padding-top: env(safe-area-inset-top);
   }
 
   body {

@@ -2,7 +2,7 @@ import type { DayReport } from '@lounge/core';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import { useAuth } from './auth';
-import type { Floor, LedgerRow, MonthReport, Product, Reservation, SessionBill, Shift, Station, StockMovement } from './types';
+import type { Floor, LedgerRow, MonthReport, RangeReport, Product, Reservation, SessionBill, Shift, Station, StockMovement } from './types';
 
 /** The floor snapshot is the heartbeat of the app: refetched on every live event. */
 export function useFloor() {
@@ -73,6 +73,17 @@ export function useSessionsLog(day: string | null) {
     queryKey: ['sessions-log', day],
     queryFn: () => get<LedgerRow[]>(`/api/reports/sessions?day=${day}`),
     enabled: !!day,
+  });
+}
+
+/** Any period of business days, both ends included (null = not ready yet). */
+export function useRangeReport(from: string | null, to: string | null) {
+  return useQuery({
+    queryKey: ['range', from, to],
+    queryFn: () => get<RangeReport>(`/api/reports/range?from=${from}&to=${to}`),
+    enabled: !!from && !!to,
+    placeholderData: (prev) => prev,
+    retry: false,
   });
 }
 

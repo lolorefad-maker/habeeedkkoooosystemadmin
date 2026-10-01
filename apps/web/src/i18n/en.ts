@@ -4,7 +4,9 @@ export const en: Dict = {
   app: { name: 'Habeedko', tagline: 'Gaming lounge' },
   nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Reservations', stock: 'Stock', reports: 'Ledger', settings: 'Settings' },
   ledger: {
-    daily: 'Daily', monthly: 'Monthly', goods: 'Goods', sessionsLog: 'Device log', device: 'Device', fromTo: 'From – to',
+    daily: 'Daily', monthly: 'Monthly', range: 'Period', from: 'From', to: 'To', rangeTotal: 'Income for the period', daysWithIncome: 'days with income',
+    last7: 'Last 7 days', lastMonth: 'Last month', thisYear: 'This year', rangeInvalid: 'The start day must come before the end day',
+    rangeTooLong: 'Pick a period of at most a year', noRange: 'No income in this period', goods: 'Goods', sessionsLog: 'Device log', device: 'Device', fromTo: 'From – to',
     duration: 'Duration', time: 'Time', drinks: 'Drinks', total: 'Total', paidBy: 'Paid by',
     noSessions: 'No paid devices on this day yet', stillOpen: 'Still open', carriedRow: 'Still playing when the day ended — this is the share of this day, paid later', carriedOutLabel: 'Counted on the day before:', month: 'Month', monthTotal: 'Month revenue',
     sessions: 'sessions', day: 'Day', received: 'Received', dailyRevenue: 'Daily revenue', noMonth: 'No data for this month',
