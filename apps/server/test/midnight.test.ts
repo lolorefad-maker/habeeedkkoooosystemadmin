@@ -180,3 +180,22 @@ describe('ledger: any period, from day to day', () => {
     expect((await h.api('GET', '/api/reports/range?from=2026-10-01&to=2026-10-07', undefined, h.tokens.cashier)).status).toBe(403);
   });
 });
+
+describe('a station stopped before midnight, paid after', () => {
+  it('the old day shows it until it stopped, and when it was paid', async () => {
+    await h.api('POST', '/api/shifts/open', { openingFloat: 0 }, h.tokens.cashier);
+    at('2026-10-07T22:00:00');
+    const s = (await h.api('POST', '/api/sessions', { stationId: (await station('PS-05')).id, mode: 'single', kind: 'open' }, h.tokens.cashier)).json.id;
+    at('2026-10-07T23:30:00');
+    expect((await h.api('POST', `/api/sessions/${s}/action`, { type: 'end' }, h.tokens.cashier)).status).toBe(200);
+    at('2026-10-08T00:05:00');
+    expect(await autoRollover(h.ctx, h.branchId)).toBe(true);
+    at('2026-10-08T01:00:00');
+    const bill = (await h.api('GET', `/api/sessions/${s}/bill`, undefined, h.tokens.cashier)).json;
+    expect((await h.api('POST', `/api/sessions/${s}/checkout`, { payments: [{ method: 'card', amount: bill.totals.due }], expectedTotal: bill.totals.total }, h.tokens.cashier)).status).toBe(200);
+    const row = (await log('2026-10-07')).find((r) => r.carried && r.stationName === 'PS-05');
+    expect(row.endedAt).toBe(Date.parse('2026-10-07T23:30:00+03:00'));
+    expect(row.paidAt).toBe(Date.parse('2026-10-08T01:00:00+03:00'));
+    expect(row.billPaidByMethod).toEqual({ card: bill.totals.due });
+  });
+});

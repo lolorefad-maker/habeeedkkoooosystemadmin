@@ -79,7 +79,7 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
   const carriedRows = [];
   if (carries.length) {
     const sess = await q
-      .select({ id: sessions.id, label: sessions.label, startedAt: sessions.startedAt, status: sessions.status, billId: sessions.billId, closedAt: sessions.closedAt, stationName: stations.name })
+      .select({ id: sessions.id, label: sessions.label, startedAt: sessions.startedAt, status: sessions.status, billId: sessions.billId, closedAt: sessions.closedAt, sessionEnd: sessions.endedAt, stationName: stations.name })
       .from(sessions)
       .leftJoin(stations, eq(stations.id, sessions.stationId))
       .where(inArray(sessions.id, carries.map((c) => c.sessionId)));
@@ -102,8 +102,9 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
         stationName: x?.stationName ?? null,
         label: x?.label ?? null,
         startedAt: x?.startedAt.getTime() ?? null,
+        // Until the day's end — or until it stopped, if it stopped before (and was paid after).
         // A negative share is a void giving back what an earlier day counted: no time range.
-        endedAt: c.time + c.items >= 0 ? until : null,
+        endedAt: c.time + c.items < 0 ? null : x?.sessionEnd && until != null ? Math.min(x.sessionEnd.getTime(), until) : until,
         playedMs: c.ms,
         timeCharge: c.time,
         items: [] as { name: string; qty: number }[],
