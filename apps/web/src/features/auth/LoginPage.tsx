@@ -103,7 +103,7 @@ export function LoginPage() {
           <h1 className="mt-2 text-xl font-semibold tracking-tight">{picked ? picked.name : t('login.title')}</h1>
           {branches.data && branches.data.length > 1 && !picked && (
             <select
-              className="rounded-control border border-line bg-surface-2 px-3 py-1.5 text-sm"
+              className="rounded-control border border-line bg-surface-2 px-3 py-1.5 text-base sm:text-sm"
               value={branchId}
               onChange={(e) => setDeviceBranch(e.target.value)}
               aria-label={t('login.branch')}

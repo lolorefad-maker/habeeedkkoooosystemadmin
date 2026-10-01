@@ -34,13 +34,15 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:flex-row md:p-6">
-      <nav className="flex shrink-0 gap-1 overflow-x-auto md:w-52 md:flex-col" aria-label={t('nav.settings')}>
+      {/* Every tab visible on a phone (a grid), a side list from tablet up. */}
+      <nav className="grid shrink-0 grid-cols-4 gap-1 md:flex md:w-52 md:flex-col" aria-label={t('nav.settings')}>
         {TABS.map((x) => (
           <button
             key={x.id}
             onClick={() => setParams({ tab: x.id })}
             className={clsx(
-              'flex h-10 shrink-0 items-center gap-2.5 rounded-control px-3 text-sm font-medium transition-colors',
+              'flex min-w-0 flex-col items-center justify-center gap-1 rounded-control px-1 py-2 text-center text-xs font-medium leading-tight transition-colors',
+              'md:h-10 md:shrink-0 md:flex-row md:justify-start md:gap-2.5 md:px-3 md:py-0 md:text-start md:text-sm',
               tab === x.id ? 'bg-accent/12 text-accent' : 'text-muted hover:bg-surface-2 hover:text-fg',
             )}
             aria-current={tab === x.id ? 'page' : undefined}

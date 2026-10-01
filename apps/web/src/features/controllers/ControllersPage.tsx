@@ -43,9 +43,9 @@ export function ControllersPage() {
 
   if (floor.isLoading || !floor.data) {
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3 p-4 md:p-6">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 p-4 sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] sm:gap-3 md:p-6">
         {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="h-32" />
+          <Skeleton key={i} className="h-24 sm:h-32" />
         ))}
       </div>
     );
@@ -84,7 +84,7 @@ export function ControllersPage() {
       {list.length === 0 ? (
         <EmptyState icon={<Gamepad />} title={t('controllers.empty')} />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] sm:gap-3">
           {visible.map((c) => {
             const state = stateOf(c, now);
             const Icon = CTRL_ICON[state];
@@ -95,11 +95,11 @@ export function ControllersPage() {
                 key={c.id}
                 data-status={CTRL_TONE[state]}
                 onClick={() => setOpenId(c.id)}
-                className="tint flex min-h-32 flex-col justify-between rounded-card border p-3.5 text-start transition-transform hover:-translate-y-0.5"
+                className="tint flex min-h-24 flex-col justify-between rounded-card border p-3 text-start transition-transform hover:-translate-y-0.5 sm:min-h-32 sm:p-3.5"
                 aria-label={t('controllers.number', { n: c.number })}
               >
                 <div className="flex items-start justify-between">
-                  <Num className="text-3xl font-bold leading-none">{c.number}</Num>
+                  <Num className="text-2xl font-bold leading-none sm:text-3xl">{c.number}</Num>
                   <Icon className="st-fg size-5" aria-hidden />
                 </div>
                 <div className="flex flex-col gap-1.5">

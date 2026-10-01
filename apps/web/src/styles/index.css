@@ -158,6 +158,22 @@
   direction: ltr;
 }
 
+/* iPhone/iPad Safari sizes date and time fields by their content (they spill out of a phone-width
+   form) and centres the value: make them behave like every other field. */
+@supports (-webkit-touch-callout: none) {
+  input[type='date'],
+  input[type='time'] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    min-width: 0;
+  }
+}
+input[type='date']::-webkit-date-and-time-value,
+input[type='time']::-webkit-date-and-time-value {
+  text-align: start;
+}
+
 /* Status tint: set data-status on an element, use --st inside. */
 [data-status='free'] { --st: var(--st-free); }
 [data-status='active'] { --st: var(--st-active); }

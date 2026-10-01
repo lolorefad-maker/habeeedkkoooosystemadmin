@@ -127,7 +127,8 @@ export function Segmented<T extends string>({
   ariaLabel?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className={clsx('flex gap-1 rounded-card bg-surface-3 p-1', className)}>
+    // Options share the row equally, never squeeze below their text: on a phone they wrap to a second row.
+    <div role="radiogroup" aria-label={ariaLabel} className={clsx('flex flex-wrap gap-1 rounded-card bg-surface-3 p-1', className)}>
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -139,7 +140,7 @@ export function Segmented<T extends string>({
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
             className={clsx(
-              'flex flex-1 flex-col items-center justify-center rounded-control px-3 font-medium transition-all duration-150 disabled:opacity-40',
+              'flex min-w-max flex-1 flex-col items-center justify-center whitespace-nowrap rounded-control px-3 font-medium transition-all duration-150 disabled:opacity-40',
               size === 'sm' ? 'h-8 text-xs' : size === 'lg' ? 'min-h-14 py-2 text-base' : 'min-h-10 py-1.5 text-sm',
               on ? 'bg-surface-1 text-fg shadow-sm ring-1 ring-line-strong' : 'text-muted hover:text-fg',
             )}

@@ -119,7 +119,7 @@ export function StockPage() {
             onChange={(e) => setQ(e.target.value)}
             placeholder={t('stock.search')}
             aria-label={t('stock.search')}
-            className="h-10 w-full rounded-control border border-line bg-surface-1 pe-3 ps-9 text-sm shadow-[var(--shadow-card)] placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
+            className="h-10 w-full rounded-control border border-line bg-surface-1 pe-3 ps-9 text-base shadow-[var(--shadow-card)] placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 sm:text-sm"
           />
         </div>
       )}
@@ -138,7 +138,8 @@ export function StockPage() {
             const open = openId === p.id;
             return (
               <div key={p.id}>
-                <div className="flex items-center gap-3 px-4 py-3">
+                {/* On a phone the actions drop to their own line so the name and price stay readable. */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
                   <button onClick={() => setOpenId(open ? null : p.id)} className="flex min-w-0 flex-1 items-center gap-3 text-start" aria-expanded={open}>
                     <ChevronDown className={clsx('size-4 shrink-0 text-faint transition-transform', open && 'rotate-180')} />
                     <div className="min-w-0">
@@ -160,7 +161,7 @@ export function StockPage() {
                     </span>
                   </div>
                   {manage && (
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex shrink-0 justify-end gap-1 max-sm:basis-full max-sm:border-t max-sm:border-line/60 max-sm:pt-1">
                       <Button size="icon" variant="ghost" onClick={() => setReceiving(p.id)} aria-label={t('goods.receive')} title={t('goods.receive')}>
                         <Plus className="size-5" />
                       </Button>

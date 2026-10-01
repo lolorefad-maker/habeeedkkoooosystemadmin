@@ -234,7 +234,7 @@ export function FloorPage() {
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && (setQ(''), e.currentTarget.blur())}
               placeholder={t('floor.searchPlaceholder')}
-              className="h-10 w-full rounded-control border border-line bg-surface-1 pe-10 ps-9 text-sm shadow-[var(--shadow-card)] placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
+              className="h-10 w-full rounded-control border border-line bg-surface-1 pe-10 ps-9 text-base shadow-[var(--shadow-card)] placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 sm:text-sm"
             />
             <span className="absolute end-3 top-1/2 hidden -translate-y-1/2 md:block">
               <Kbd>/</Kbd>

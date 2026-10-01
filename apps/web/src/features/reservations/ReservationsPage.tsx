@@ -11,7 +11,7 @@ import { EmptyState, Field, Input, Money, Num, Row, Segmented, Select, Skeleton 
 import { useT } from '../../i18n';
 import { post } from '../../lib/api';
 import { useNow } from '../../lib/clock';
-import { useFmt } from '../../lib/format';
+import { isolate, useFmt } from '../../lib/format';
 import { useFloor, useReservations } from '../../lib/queries';
 import type { Floor, Reservation } from '../../lib/types';
 
@@ -54,7 +54,7 @@ export function ReservationsPage() {
             type="date"
             value={current}
             onChange={(e) => e.target.value && setDay(e.target.value)}
-            className="num h-10 rounded-control bg-transparent px-2 text-sm font-medium focus:outline-none"
+            className="num h-10 rounded-control bg-transparent px-2 text-base font-medium focus:outline-none sm:text-sm"
             aria-label={t('reservations.date')}
           />
           <Button variant="ghost" size="icon" onClick={() => shift(1)} aria-label="+1">
@@ -283,11 +283,18 @@ export function NewReservation({
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
+        {/* A phone booking starts with who is coming. */}
+        <Field label={t('start.customer')} htmlFor="r-name">
+          <Input id="r-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="off" />
+        </Field>
+        <Field label={t('common.phone')} htmlFor="r-phone">
+          <Input id="r-phone" type="tel" dir="ltr" className="num text-start" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('common.optional')} />
+        </Field>
         <Field label={t('reservations.station')} htmlFor="r-station" className="sm:col-span-2">
           <Select id="r-station" value={stationId} onChange={(e) => setStationId(e.target.value)}>
             {stations.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} · {tk('types', s.type)} · {tk('tiers', s.tier)}
+                {isolate(s.name)} · {tk('types', s.type)} · {tk('tiers', s.tier)}
               </option>
             ))}
           </Select>
@@ -323,12 +330,6 @@ export function NewReservation({
             <Segmented value={mode} onChange={setMode} options={station.modes.map((m) => ({ value: m, label: tk('modes', m) }))} />
           </Field>
         )}
-        <Field label={t('start.customer')} htmlFor="r-name">
-          <Input id="r-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
-        </Field>
-        <Field label={t('common.phone')} htmlFor="r-phone">
-          <Input id="r-phone" type="tel" dir="ltr" className="num text-start" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('common.optional')} />
-        </Field>
         <Field label={t('reservations.deposit')} htmlFor="r-deposit" hint={!floor.shift && deposit ? t('shift.noneHint') : undefined}>
           <Input id="r-deposit" inputMode="decimal" className="num" value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder={t('reservations.depositNone')} />
         </Field>

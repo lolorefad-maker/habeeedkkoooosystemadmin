@@ -119,7 +119,8 @@ export function Modal({
             </Dialog.Close>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">{children}</div>
-          {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-4">{footer}</footer>}
+          {/* On a phone the footer actions span the width (thumb reach). */}
+          {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-4 max-sm:[&>*]:flex-1">{footer}</footer>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

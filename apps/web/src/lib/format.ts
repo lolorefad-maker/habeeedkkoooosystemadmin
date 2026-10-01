@@ -57,7 +57,8 @@ export function useFmt() {
 
 export type Fmt = ReturnType<typeof useFmt>;
 
-const isolate = (s: string) => `⁨${s}⁩`;
+/** First-strong isolate: a Latin name ("PS-01") keeps its own order inside Arabic text, even in an <option>. */
+export const isolate = (s: string) => `⁨${s}⁩`;
 
 function minutesText(m: number, lang: string) {
   const h = Math.floor(m / 60);
