@@ -5,7 +5,9 @@ services:
     name: lounge-os
     runtime: node
     region: frankfurt # closest Render region to the Levant
-    plan: starter # always on: the free plan sleeps, which stops timers, day close and controller charging
+    # TEMPORARY free plan for trying it out. The free plan sleeps after ~15 min idle, which stops
+    # time alerts, day close and controller charging — switch back to `starter` before real use.
+    plan: free
     buildCommand: npm ci && npm run build -w @lounge/web
     startCommand: npm start
     healthCheckPath: /api/health
@@ -38,4 +40,6 @@ databases:
     databaseName: lounge
     user: lounge
     region: frankfurt
-    plan: basic-256mb # paid plan: daily backups; free databases expire
+    # TEMPORARY free plan: free databases expire after about a month and have no backups.
+    # Upgrade to `basic-256mb` (keeps the data) before real use.
+    plan: free
