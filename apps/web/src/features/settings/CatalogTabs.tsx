@@ -14,6 +14,7 @@ import { useFmt } from '../../lib/format';
 import type { SettingsBundle } from '../../lib/queries';
 import type { Product, Station } from '../../lib/types';
 import { StockPill } from '../cafe/products';
+import { autoFocusField } from '../../lib/viewport';
 
 export function ChipGroup({ options, value, onChange }: { options: { value: string; label: string }[]; value: string[]; onChange: (v: string[]) => void }) {
   return (
@@ -294,7 +295,7 @@ export function ProductModal({ product, categories, onClose }: { product: Produc
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t('settings.product.name')} htmlFor="p-name">
-          <Input id="p-name" autoFocus={!product} value={form.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} />
+          <Input id="p-name" autoFocus={!product && autoFocusField()} value={form.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} />
         </Field>
         <Field label={t('settings.product.category')} htmlFor="p-cat" hint={t('settings.product.categoryHint')}>
           <Input id="p-cat" list="cats" value={form.category} onChange={(e) => set({ category: e.target.value })} maxLength={40} />

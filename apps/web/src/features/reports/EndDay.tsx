@@ -11,6 +11,7 @@ import { useT } from '../../i18n';
 import { post } from '../../lib/api';
 import { useFmt } from '../../lib/format';
 import { useFloor, useStock } from '../../lib/queries';
+import { autoFocusField } from '../../lib/viewport';
 
 interface Closed {
   day: string;
@@ -160,7 +161,7 @@ export function EndDayDialog({ report, onClose, onPrintDay }: { report: DayRepor
               {t('endDay.cashHint')} <Money value={shift.expectedCash} currency className="font-semibold text-fg" />
             </p>
             <Input
-              autoFocus
+              autoFocus={autoFocusField()}
               inputMode="decimal"
               aria-label={t('shift.counted')}
               className="num mt-3 h-14 text-center text-2xl font-semibold"

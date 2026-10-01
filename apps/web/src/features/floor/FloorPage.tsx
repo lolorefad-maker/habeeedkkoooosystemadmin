@@ -259,7 +259,8 @@ export function FloorPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto">
+        {/* Tools wrap onto a second line on a phone: none hides off the edge. */}
+        <div className="flex flex-wrap items-center gap-2">
           {can.reservations(role) && (
             <button
               onClick={() => setBooking({})}

@@ -14,6 +14,7 @@ import { useNow } from '../../lib/clock';
 import { useFmt } from '../../lib/format';
 import { useFloor } from '../../lib/queries';
 import { ControllerActions, CTRL_ICON, CTRL_TONE, stateOf } from './parts';
+import { autoFocusField } from '../../lib/viewport';
 
 const FILTERS: { value: ControllerState | 'all'; label: TKey }[] = [
   { value: 'all', label: 'common.all' },
@@ -158,7 +159,7 @@ function AddControllers({ open, onOpenChange }: { open: boolean; onOpenChange: (
       }
     >
       <Field label={t('controllers.addCount')} htmlFor="ctrl-count">
-        <Input id="ctrl-count" autoFocus inputMode="numeric" className="num text-center text-xl" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ''))} />
+        <Input id="ctrl-count" autoFocus={autoFocusField()} inputMode="numeric" className="num text-center text-xl" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ''))} />
       </Field>
     </Modal>
   );

@@ -47,8 +47,8 @@ const NAV: NavItem[] = [
   { to: '/controllers', label: 'nav.controllers', icon: Gamepad, mobile: true },
   { to: '/reservations', label: 'nav.reservations', icon: CalendarDays, allow: can.reservations, mobile: true },
   { to: '/stock', label: 'nav.stock', icon: Boxes, allow: can.reports, mobile: true },
-  { to: '/reports', label: 'nav.reports', icon: BarChart3, allow: can.reports },
-  { to: '/settings', label: 'nav.settings', icon: Settings, allow: can.settings },
+  { to: '/reports', label: 'nav.reports', icon: BarChart3, allow: can.reports, mobile: true },
+  { to: '/settings', label: 'nav.settings', icon: Settings, allow: can.settings, mobile: true },
 ];
 
 export function AppShell() {
@@ -130,11 +130,11 @@ export function AppShell() {
                 key={n.to}
                 to={n.to}
                 className={({ isActive }) =>
-                  clsx('flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium', isActive ? 'text-accent' : 'text-muted')
+                  clsx('flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 text-[11px] font-medium', isActive ? 'text-accent' : 'text-muted')
                 }
               >
-                <n.icon className="size-5" aria-hidden />
-                {t(n.label)}
+                <n.icon className="size-5 shrink-0" aria-hidden />
+                <span className="max-w-full truncate">{t(n.label)}</span>
               </NavLink>
             ))}
         </nav>

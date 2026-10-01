@@ -11,6 +11,7 @@ import { Button } from '../ui/button';
 import { useAction } from '../ui/feedback';
 import { Modal } from '../ui/overlays';
 import { Field, Input, Money, Num, Row } from '../ui/primitives';
+import { autoFocusField } from '../../lib/viewport';
 
 /** Cash drawer shift: always visible, one tap to open/close. */
 export function ShiftPill() {
@@ -100,7 +101,7 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
           <Input
             id="shift-amount"
             inputMode="decimal"
-            autoFocus
+            autoFocus={autoFocusField()}
             className="num h-14 text-center text-2xl font-semibold"
             placeholder={f.money(0)}
             value={amount}

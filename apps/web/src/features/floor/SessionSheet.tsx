@@ -35,6 +35,7 @@ import type { Floor } from '../../lib/types';
 import { TimeLines } from '../checkout/BillBreakdown';
 import { announceStock, CartLines, cartTotal, QuickProducts, useCart, type StockLeft } from '../cafe/products';
 import { ControllerActions, ControllerChip, stateOf } from '../controllers/parts';
+import { autoFocusField } from '../../lib/viewport';
 
 export function SessionSheet({
   view,
@@ -357,7 +358,7 @@ function PaymentModal({ open, onOpenChange, sessionId, suggested }: { open: bool
         <Field label={t('pay.amount')} htmlFor="pay-amount">
           <Input
             id="pay-amount"
-            autoFocus
+            autoFocus={autoFocusField()}
             inputMode="decimal"
             className="num h-14 text-center text-2xl font-semibold"
             value={amount}
@@ -513,7 +514,7 @@ function DeviceDrinks({
         }
       >
         <Field label={t('common.reason')} htmlFor="void-reason">
-          <Input id="void-reason" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Input id="void-reason" autoFocus={autoFocusField()} value={reason} onChange={(e) => setReason(e.target.value)} />
         </Field>
       </Modal>
     </div>
@@ -600,7 +601,7 @@ function VoidSessionModal({ open, onOpenChange, sessionId, onDone }: { open: boo
       }
     >
       <Field label={t('session.voidReason')} htmlFor="void-session-reason">
-        <Input id="void-session-reason" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Input id="void-session-reason" autoFocus={autoFocusField()} value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
     </Modal>
   );

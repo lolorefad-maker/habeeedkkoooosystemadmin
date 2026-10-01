@@ -46,7 +46,7 @@ export function QuickProducts({ products, cart }: { products: Product[]; cart: C
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+      <div className="flex flex-wrap gap-1.5">
         {[null, ...categories].map((c) => (
           <button
             key={c ?? '_all'}

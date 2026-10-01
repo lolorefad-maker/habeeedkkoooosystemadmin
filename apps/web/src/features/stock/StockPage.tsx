@@ -15,6 +15,7 @@ import { useMovements, useStock } from '../../lib/queries';
 import type { Product, StockMovement } from '../../lib/types';
 import { stockLevel, type StockLevel } from '../cafe/products';
 import { ProductModal } from '../settings/CatalogTabs';
+import { autoFocusField } from '../../lib/viewport';
 
 type Filter = 'all' | 'low' | 'out';
 const ORDER: Record<StockLevel, number> = { out: 0, low: 1, ok: 2 };
@@ -452,7 +453,7 @@ function AdjustModal({ product, onClose }: { product: Product; onClose: () => vo
     >
       <div className="flex flex-col gap-4">
         <Field label={t('goods.counted')} htmlFor="adj-count" hint={`${t('reports.systemQty')}: ${product.stockQty}`}>
-          <Input id="adj-count" autoFocus inputMode="numeric" className="num h-14 text-center text-2xl font-semibold" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ''))} />
+          <Input id="adj-count" autoFocus={autoFocusField()} inputMode="numeric" className="num h-14 text-center text-2xl font-semibold" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ''))} />
         </Field>
         {diff !== 0 && (
           <div data-status={diff < 0 ? 'overtime' : 'free'} className="st-soft rounded-control px-3 py-2 text-sm font-semibold">

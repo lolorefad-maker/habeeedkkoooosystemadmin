@@ -30,7 +30,8 @@ export function Sheet({ open, onOpenChange, title, description, headerExtra, chi
         <Dialog.Content
           className={clsx(
             'anim-sheet fixed z-50 flex flex-col bg-surface-1 shadow-[var(--shadow-float)] focus:outline-none',
-            'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-sheet border-t border-line',
+            // Phone: a bottom sheet that rides above the on-screen keyboard (lib/viewport.ts).
+            'inset-x-0 bottom-[var(--vv-bottom,0px)] max-h-[calc(var(--vv-height,100vh)*0.92)] rounded-t-sheet border-t border-line',
             'md:inset-y-0 md:end-0 md:start-auto md:max-h-none md:w-[440px] md:rounded-none md:border-t-0 md:border-s',
             className,
           )}
@@ -54,7 +55,7 @@ export function Sheet({ open, onOpenChange, title, description, headerExtra, chi
               </button>
             </Dialog.Close>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
           {footer && <footer className="border-t border-line bg-surface-1 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</footer>}
         </Dialog.Content>
       </Dialog.Portal>
@@ -65,6 +66,7 @@ export function Sheet({ open, onOpenChange, title, description, headerExtra, chi
 /**
  * Focus stays inside the dialog (keyboard users can Tab through it) without painting a focus ring
  * on the close button: an explicit `autoFocus` field wins, otherwise the dialog container.
+ * (Fields in windows use `autoFocusField()`, so a phone opens a window without its keyboard.)
  */
 function focusDialogOrAutofocus(e: Event) {
   e.preventDefault();
@@ -93,7 +95,9 @@ export function Modal({
         <Dialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]" />
         <Dialog.Content
           className={clsx(
-            'anim-pop fixed inset-0 z-50 m-auto flex h-fit max-h-[94dvh] w-[calc(100vw-1.5rem)] flex-col rounded-sheet border border-line bg-surface-1 shadow-[var(--shadow-float)] focus:outline-none focus-visible:outline-none',
+            // Centred in the visible part of the screen — above a phone's keyboard (lib/viewport.ts) —
+            // and never taller than it: the body scrolls, the title and the action button stay in view.
+            'anim-pop fixed inset-x-0 top-[var(--vv-top,0px)] bottom-[var(--vv-bottom,0px)] z-50 m-auto flex h-fit max-h-[calc(var(--vv-height,100vh)-1.5rem)] w-[calc(100vw-1.5rem)] flex-col rounded-sheet border border-line bg-surface-1 shadow-[var(--shadow-float)] focus:outline-none focus-visible:outline-none',
             size === 'sm' && 'max-w-sm',
             size === 'md' && 'max-w-lg',
             size === 'lg' && 'max-w-3xl',
@@ -118,7 +122,7 @@ export function Modal({
               </button>
             </Dialog.Close>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">{children}</div>
           {/* On a phone the footer actions span the width (thumb reach). */}
           {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-4 max-sm:[&>*]:flex-1">{footer}</footer>}
         </Dialog.Content>
