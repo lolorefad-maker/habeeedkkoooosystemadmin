@@ -39,7 +39,7 @@ export function Sheet({ open, onOpenChange, title, description, headerExtra, chi
           tabIndex={-1}
         >
           <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong md:hidden" aria-hidden />
-          <header className="flex items-start gap-3 border-b border-line px-5 pb-4 pt-4 md:pt-5">
+          <header className="flex shrink-0 items-start gap-3 border-b border-line px-5 pb-4 pt-4 md:pt-5">
             <div className="min-w-0 flex-1">
               <Dialog.Title className="flex flex-wrap items-center gap-2 text-xl font-semibold text-fg">{title}</Dialog.Title>
               {description ? (
@@ -55,8 +55,9 @@ export function Sheet({ open, onOpenChange, title, description, headerExtra, chi
               </button>
             </Dialog.Close>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
-          {footer && <footer className="border-t border-line bg-surface-1 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</footer>}
+          {/* `flex-auto` for Safari: see Modal. */}
+          <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+          {footer && <footer className="shrink-0 border-t border-line bg-surface-1 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</footer>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -97,7 +98,10 @@ export function Modal({
           className={clsx(
             // Centred in the visible part of the screen — above a phone's keyboard (lib/viewport.ts) —
             // and never taller than it: the body scrolls, the title and the action button stay in view.
-            'anim-pop fixed inset-x-0 top-[var(--vv-top,0px)] bottom-[var(--vv-bottom,0px)] z-50 m-auto flex h-fit max-h-[calc(var(--vv-height,100vh)-1.5rem)] w-[calc(100vw-1.5rem)] flex-col rounded-sheet border border-line bg-surface-1 shadow-[var(--shadow-float)] focus:outline-none focus-visible:outline-none',
+            // Plain auto height + top 50% / translate (the `translate` property, so the open animation's
+            // `transform` doesn't fight it). Not `h-fit` with `m-auto`: iPhone Safari sized such a
+            // window to its title and button and the form collapsed to nothing.
+            'anim-pop fixed inset-x-0 top-[calc(var(--vv-top,0px)+var(--vv-height,100vh)/2)] z-50 mx-auto flex max-h-[calc(var(--vv-height,100vh)-1.5rem)] w-[calc(100vw-1.5rem)] -translate-y-1/2 flex-col rounded-sheet border border-line bg-surface-1 shadow-[var(--shadow-float)] focus:outline-none focus-visible:outline-none',
             size === 'sm' && 'max-w-sm',
             size === 'md' && 'max-w-lg',
             size === 'lg' && 'max-w-3xl',
@@ -107,7 +111,7 @@ export function Modal({
           onOpenAutoFocus={focusDialogOrAutofocus}
           tabIndex={-1}
         >
-          <header className="flex items-start gap-3 px-5 pb-3 pt-5">
+          <header className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5">
             <div className="min-w-0 flex-1">
               <Dialog.Title className="text-lg font-semibold text-fg">{title}</Dialog.Title>
               {description ? (
@@ -122,9 +126,11 @@ export function Modal({
               </button>
             </Dialog.Close>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">{children}</div>
+          {/* `flex-auto`, not `flex-1`: the body counts its content toward the window's height (a
+              zero basis lets an engine size the window to title + button), then shrinks and scrolls. */}
+          <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 pb-4">{children}</div>
           {/* On a phone the footer actions span the width (thumb reach). */}
-          {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-4 max-sm:[&>*]:flex-1">{footer}</footer>}
+          {footer && <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-5 py-4 max-sm:[&>*]:flex-1">{footer}</footer>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

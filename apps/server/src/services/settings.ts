@@ -8,11 +8,23 @@ import {
   ruleEffectSchema,
   ruleMatchSchema,
 } from '@lounge/core';
-import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext } from '../context';
 import type { Q } from '../db';
-import { branches, packages, payments, pricingRules, products, sessions, stations, stockMovements, users } from '../db/schema';
+import {
+  branches,
+  controllers,
+  packages,
+  payments,
+  pricingRules,
+  products,
+  reservations,
+  sessions,
+  stations,
+  stockMovements,
+  users,
+} from '../db/schema';
 import { hashPin, type Actor } from '../lib/auth';
 import { forbidden, notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -95,8 +107,21 @@ export const stationInput = z.object({
   active: z.boolean().default(true),
 });
 
+/** The shop's stations — not the deleted ones (see `listArchivedStations`). */
 export async function listStations(q: Q, branchId: string) {
-  return q.select().from(stations).where(eq(stations.branchId, branchId)).orderBy(asc(stations.sort), asc(stations.name));
+  return q
+    .select()
+    .from(stations)
+    .where(and(eq(stations.branchId, branchId), isNull(stations.archivedAt)))
+    .orderBy(asc(stations.sort), asc(stations.name));
+}
+
+/** Deleted stations, only so past sessions in the ledger still show which station they were on. */
+export async function listArchivedStations(q: Q, branchId: string) {
+  return q
+    .select({ id: stations.id, name: stations.name })
+    .from(stations)
+    .where(and(eq(stations.branchId, branchId), isNotNull(stations.archivedAt)));
 }
 
 export async function saveStation(ctx: AppContext, actor: Actor, id: string | null, raw: unknown) {
@@ -108,11 +133,14 @@ export async function saveStation(ctx: AppContext, actor: Actor, id: string | nu
       const same = await tx
         .select({ id: stations.id })
         .from(stations)
-        .where(and(eq(stations.branchId, actor.branchId), sql`lower(${stations.name}) = lower(${input.name})`));
+        .where(and(eq(stations.branchId, actor.branchId), isNull(stations.archivedAt), sql`lower(${stations.name}) = lower(${input.name})`));
       if (same.some((s) => s.id !== id)) throw new DomainError('name_taken', 'Another station already has this name');
     }
     if (id) {
-      const [cur] = await tx.select().from(stations).where(and(eq(stations.id, id), eq(stations.branchId, actor.branchId)));
+      const [cur] = await tx
+        .select()
+        .from(stations)
+        .where(and(eq(stations.id, id), eq(stations.branchId, actor.branchId), isNull(stations.archivedAt)));
       if (!cur) throw notFound('station');
       if (input.active === false || input.maintenance === true) {
         const [busy] = await tx.select({ id: sessions.id }).from(sessions).where(and(eq(sessions.stationId, id), eq(sessions.status, 'running')));
@@ -127,6 +155,39 @@ export async function saveStation(ctx: AppContext, actor: Actor, id: string | nu
     await tx.insert(stations).values({ ...newStation, id: sid, branchId: actor.branchId });
     await record({ type: 'station.created', entity: 'station', entityId: sid, payload: newStation });
     return { id: sid };
+  });
+}
+
+/**
+ * Delete a station: it leaves the floor, settings and bookings for good. The row is kept (archived)
+ * because past sessions and bills point at it. Not while someone is on it or it is booked ahead.
+ */
+export async function deleteStation(ctx: AppContext, actor: Actor, id: string) {
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = new Date(ctx.clock.now());
+    const [cur] = await tx
+      .select()
+      .from(stations)
+      .where(and(eq(stations.id, id), eq(stations.branchId, actor.branchId), isNull(stations.archivedAt)));
+    if (!cur) throw notFound('station');
+    // Playing, or ended and still to be paid: settle it first.
+    const [busy] = await tx
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(and(eq(sessions.stationId, id), inArray(sessions.status, ['running', 'ended'])))
+      .limit(1);
+    if (busy) throw new DomainError('station_has_session', 'End and settle the session on this station first');
+    const [booked] = await tx
+      .select({ id: reservations.id })
+      .from(reservations)
+      .where(and(eq(reservations.stationId, id), eq(reservations.status, 'confirmed'), isNull(reservations.archivedAt)))
+      .limit(1);
+    if (booked) throw new DomainError('station_booked', 'Cancel or move the bookings on this station first');
+    // Its controllers go back on the shelf.
+    await tx.update(controllers).set({ stationId: null, updatedAt: now }).where(and(eq(controllers.branchId, actor.branchId), eq(controllers.stationId, id)));
+    await tx.update(stations).set({ archivedAt: now, active: false, updatedAt: now }).where(eq(stations.id, id));
+    await record({ type: 'station.deleted', entity: 'station', entityId: id, payload: { name: cur.name } });
+    return { id };
   });
 }
 
@@ -326,8 +387,31 @@ export const productInput = z.object({
   stockQty: z.number().int().min(0).max(1_000_000).optional(),
 });
 
+/** The shop's products — not the deleted ones. */
 export async function listProducts(q: Q, branchId: string) {
-  return q.select().from(products).where(eq(products.branchId, branchId)).orderBy(asc(products.category), asc(products.sort), asc(products.name));
+  return q
+    .select()
+    .from(products)
+    .where(and(eq(products.branchId, branchId), isNull(products.archivedAt)))
+    .orderBy(asc(products.category), asc(products.sort), asc(products.name));
+}
+
+/**
+ * Delete a product: gone from the drinks buttons, settings and the stock page. The row is kept
+ * (archived) for the stock history; items already sold keep their own name and price on the bill.
+ */
+export async function deleteProduct(ctx: AppContext, actor: Actor, id: string) {
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = new Date(ctx.clock.now());
+    const [cur] = await tx
+      .select()
+      .from(products)
+      .where(and(eq(products.id, id), eq(products.branchId, actor.branchId), isNull(products.archivedAt)));
+    if (!cur) throw notFound('product');
+    await tx.update(products).set({ archivedAt: now, active: false, updatedAt: now }).where(eq(products.id, id));
+    await record({ type: 'product.deleted', entity: 'product', entityId: id, payload: { name: cur.name, stockQty: cur.stockQty } });
+    return { id };
+  });
 }
 
 export async function saveProduct(ctx: AppContext, actor: Actor, id: string | null, raw: unknown) {
@@ -339,7 +423,7 @@ export async function saveProduct(ctx: AppContext, actor: Actor, id: string | nu
       const same = await tx
         .select({ id: products.id })
         .from(products)
-        .where(and(eq(products.branchId, actor.branchId), sql`lower(${products.name}) = lower(${name.trim()})`));
+        .where(and(eq(products.branchId, actor.branchId), isNull(products.archivedAt), sql`lower(${products.name}) = lower(${name.trim()})`));
       if (same.some((p) => p.id !== id)) throw new DomainError('name_taken', 'Another product already has this name');
     }
     const branch = await getBranch(tx, actor.branchId);
@@ -357,7 +441,10 @@ export async function saveProduct(ctx: AppContext, actor: Actor, id: string | nu
 
     if (id) {
       const { stockQty, ...input } = productInput.partial().parse(raw);
-      const [cur] = await tx.select().from(products).where(and(eq(products.id, id), eq(products.branchId, actor.branchId)));
+      const [cur] = await tx
+        .select()
+        .from(products)
+        .where(and(eq(products.id, id), eq(products.branchId, actor.branchId), isNull(products.archivedAt)));
       if (!cur) throw notFound('product');
       const recount = stockQty !== undefined && stockQty !== cur.stockQty;
       await tx

@@ -4,11 +4,13 @@ import { BatteryCharging, BatteryWarning, Check, Gamepad, Plus, Undo2, Wrench, Z
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
+import { DeleteButton } from '../../components/ui/DeleteButton';
 import { useAction } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/overlays';
 import { Num, Select } from '../../components/ui/primitives';
 import { useT } from '../../i18n';
 import { post } from '../../lib/api';
+import { can, useAuth } from '../../lib/auth';
 import { useNow } from '../../lib/clock';
 import { useFmt } from '../../lib/format';
 import type { Controller, Floor } from '../../lib/types';
@@ -136,6 +138,7 @@ export function ControllerActions({ c, floor, onClose }: { c: Controller; floor:
   const state = stateOf(c, now);
   const [swapFor, setSwapFor] = useState<string | null>(null);
   const [giveTo, setGiveTo] = useState('');
+  const role = useAuth((s) => s.user?.role);
   const stationName = (id: string | null) => floor.stations.find((s) => s.id === id)?.name ?? '';
   const spares = floor.controllers.filter((x) => x.id !== c.id && stateOf(x, now) === 'spare');
 
@@ -234,6 +237,17 @@ export function ControllerActions({ c, floor, onClose }: { c: Controller; floor:
           <Button size="lg" block variant="success" loading={busy} icon={<Check className="size-5" />} onClick={async () => (await run(() => post(`/api/controllers/${c.id}/broken`, { broken: false }))) && onClose()}>
             {t('controllers.markFixed')}
           </Button>
+        )}
+        {/* Lost or beyond repair: the owner removes it (not while a customer has it). */}
+        {can.settings(role) && state !== 'at_station' && (
+          <DeleteButton
+            className="mt-2 w-full"
+            label={t('controllers.delete')}
+            confirmTitle={t('controllers.deleteConfirm', { n: c.number })}
+            body={t('controllers.deleteBody')}
+            path={`/api/controllers/${c.id}`}
+            onDeleted={onClose}
+          />
         )}
       </div>
     </Modal>

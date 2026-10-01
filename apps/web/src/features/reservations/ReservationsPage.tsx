@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { useEffect, useRef, useState } from 'react';
 import { TypeIcon, VipBadge } from '../../components/station/status';
 import { Button } from '../../components/ui/button';
+import { DeleteButton } from '../../components/ui/DeleteButton';
 import { useAction } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/overlays';
 import { EmptyState, Field, Input, Money, Num, Row, Segmented, Select, Skeleton } from '../../components/ui/primitives';
@@ -16,6 +17,9 @@ import { useFloor, useReservations } from '../../lib/queries';
 import type { Floor, Reservation } from '../../lib/types';
 
 const HOUR_PX = 84;
+
+/** A booking's station — also a deleted one, so old bookings still show its name. */
+const stationOf = (floor: Floor, id: string) => floor.stations.find((s) => s.id === id) ?? floor.archivedStations?.find((s) => s.id === id);
 const STATUS_TONE: Record<Reservation['status'], string> = {
   confirmed: 'reserved',
   checked_in: 'active',
@@ -171,7 +175,7 @@ function AgendaList({ floor, list, onOpen }: { floor: Floor; list: Reservation[]
   return (
     <ul className="flex flex-col gap-2 md:hidden">
       {list.map((r) => {
-        const st = floor.stations.find((s) => s.id === r.stationId);
+        const st = stationOf(floor, r.stationId);
         return (
           <li key={r.id}>
             <button data-status={STATUS_TONE[r.status]} onClick={() => onOpen(r.id)} className="tint flex w-full items-center gap-3 rounded-card border p-3 text-start">
@@ -348,7 +352,7 @@ export function ReservationDetails({ r, floor, onClose }: { r: Reservation; floo
   const f = useFmt();
   const now = useNow();
   const { busy, run } = useAction();
-  const st = floor.stations.find((s) => s.id === r.stationId);
+  const st = stationOf(floor, r.stationId);
   const cancel = evaluateCancellation(r, now, floor.branch.settings.reservations);
   const owed = r.deposit - r.fee - r.refunded;
 
@@ -398,6 +402,17 @@ export function ReservationDetails({ r, floor, onClose }: { r: Reservation; floo
             <Button block loading={busy} onClick={() => run(() => post(`/api/reservations/${r.id}/refund`, { method: 'cash' }))}>
               {t('reservations.refund')} · <Money value={owed} />
             </Button>
+          )}
+          {/* No money hangs on it (no deposit held, nothing owed back): it can go from the list. */}
+          {((r.status === 'confirmed' && r.deposit === 0) || (r.status !== 'confirmed' && r.status !== 'checked_in' && owed <= 0)) && (
+            <DeleteButton
+              className="w-full"
+              label={t('reservations.delete')}
+              confirmTitle={t('reservations.deleteConfirm', { name: r.customerName })}
+              body={t('reservations.deleteBody')}
+              path={`/api/reservations/${r.id}`}
+              onDeleted={onClose}
+            />
           )}
         </div>
       }

@@ -30,17 +30,20 @@ import { monthReport, sessionsLog } from './services/ledger';
 import { exportSetup, importSetup } from './services/setup';
 import { adjustStock, listMovements, listStock, receiveStock } from './services/stock';
 import { createOrder, voidOrderItem } from './services/orders';
-import { cancelReservation, createReservation, listReservations, refundReservation } from './services/reservations';
+import { cancelReservation, createReservation, deleteReservation, listReservations, refundReservation } from './services/reservations';
 import {
   addControllers,
   assignController,
   chargeController,
+  deleteController,
   listControllers,
   readyController,
   setControllerBroken,
 } from './services/controllers';
 import { addSessionPayment, reopenSession, sessionAction, sessionBill, setPlan, startSession, voidSession } from './services/sessions';
 import {
+  deleteProduct,
+  deleteStation,
   listCurrentRules,
   listPackages,
   listProducts,
@@ -215,6 +218,7 @@ export async function buildApp(ctx: AppContext) {
   // ------------------------------------------------------------------ controllers
   app.get('/api/controllers', route('floor.view', async (_req, actor) => listControllers(ctx.db, actor.branchId)));
   app.post('/api/controllers', route('settings.manage', async (req, actor) => addControllers(ctx, actor, req.body)));
+  app.delete('/api/controllers/:id', route('settings.manage', async (req, actor) => deleteController(ctx, actor, id(req))));
   app.post('/api/controllers/:id/charge', route('controllers.manage', async (req, actor) => chargeController(ctx, actor, id(req), req.body)));
   app.post('/api/controllers/:id/ready', route('controllers.manage', async (req, actor) => readyController(ctx, actor, id(req))));
   app.post('/api/controllers/:id/assign', route('controllers.manage', async (req, actor) => assignController(ctx, actor, id(req), req.body)));
@@ -264,6 +268,7 @@ export async function buildApp(ctx: AppContext) {
   app.post('/api/reservations', route('reservation.manage', async (req, actor) => createReservation(ctx, actor, req.body)));
   app.post('/api/reservations/:id/cancel', route('reservation.manage', async (req, actor) => cancelReservation(ctx, actor, id(req), req.body)));
   app.post('/api/reservations/:id/refund', route('reservation.manage', async (req, actor) => refundReservation(ctx, actor, id(req), req.body)));
+  app.delete('/api/reservations/:id', route('reservation.manage', async (req, actor) => deleteReservation(ctx, actor, id(req))));
 
   // ------------------------------------------------------------------ shifts & days
   app.get('/api/shifts/current', route('floor.view', async (_req, actor) => ({ shift: await currentShift(ctx.db, actor.branchId) })));
@@ -329,6 +334,7 @@ export async function buildApp(ctx: AppContext) {
   app.post('/api/settings/import', route('settings.manage', async (req, actor) => importSetup(ctx, actor, req.body)));
   app.post('/api/settings/stations', route('settings.manage', async (req, actor) => saveStation(ctx, actor, null, req.body)));
   app.patch('/api/settings/stations/:id', route('settings.manage', async (req, actor) => saveStation(ctx, actor, id(req), req.body)));
+  app.delete('/api/settings/stations/:id', route('settings.manage', async (req, actor) => deleteStation(ctx, actor, id(req))));
   app.post('/api/settings/rules', route('settings.manage', async (req, actor) => saveRule(ctx, actor, null, req.body)));
   app.put('/api/settings/rules/:id', route('settings.manage', async (req, actor) => saveRule(ctx, actor, id(req), req.body)));
   app.post('/api/pricing/discount', route('settings.manage', async (req, actor) => startQuickDiscount(ctx, actor, req.body)));
@@ -337,6 +343,7 @@ export async function buildApp(ctx: AppContext) {
   app.put('/api/settings/packages/:id', route('settings.manage', async (req, actor) => savePackage(ctx, actor, id(req), req.body)));
   app.post('/api/settings/products', route('settings.manage', async (req, actor) => saveProduct(ctx, actor, null, req.body)));
   app.patch('/api/settings/products/:id', route('settings.manage', async (req, actor) => saveProduct(ctx, actor, id(req), req.body)));
+  app.delete('/api/settings/products/:id', route('settings.manage', async (req, actor) => deleteProduct(ctx, actor, id(req))));
   app.post('/api/settings/staff', route('staff.manage', async (req, actor) => saveStaff(ctx, actor, null, req.body)));
   app.patch('/api/settings/staff/:id', route('staff.manage', async (req, actor) => saveStaff(ctx, actor, id(req), req.body)));
 

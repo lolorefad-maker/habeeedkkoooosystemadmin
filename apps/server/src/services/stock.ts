@@ -1,5 +1,5 @@
 import { DomainError } from '@lounge/core';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext } from '../context';
 import type { Q } from '../db';
@@ -38,7 +38,7 @@ export async function listStock(q: Q, branchId: string) {
   return q
     .select()
     .from(products)
-    .where(and(eq(products.branchId, branchId), eq(products.active, true)))
+    .where(and(eq(products.branchId, branchId), eq(products.active, true), isNull(products.archivedAt)))
     .orderBy(desc(products.trackStock), asc(products.category), asc(products.sort), asc(products.name));
 }
 
@@ -60,7 +60,7 @@ export async function receiveStock(ctx: AppContext, actor: Actor, raw: unknown) 
         const [same] = await tx
           .select({ id: products.id })
           .from(products)
-          .where(and(eq(products.branchId, branch.id), sql`lower(${products.name}) = lower(${line.newProduct!.name})`));
+          .where(and(eq(products.branchId, branch.id), isNull(products.archivedAt), sql`lower(${products.name}) = lower(${line.newProduct!.name})`));
         if (same) throw new DomainError('name_taken', 'A product with this name already exists — pick it from the list');
         productId = newId();
         await tx.insert(products).values({
@@ -76,7 +76,10 @@ export async function receiveStock(ctx: AppContext, actor: Actor, raw: unknown) 
         });
         await record({ type: 'product.created', entity: 'product', entityId: productId, payload: { ...line.newProduct, price: line.price ?? 0 } });
       }
-      const [p] = await tx.select().from(products).where(and(eq(products.id, productId), eq(products.branchId, branch.id)));
+      const [p] = await tx
+        .select()
+        .from(products)
+        .where(and(eq(products.id, productId), eq(products.branchId, branch.id), isNull(products.archivedAt)));
       if (!p) throw notFound('product');
 
       const added = line.cartons * line.packSize;

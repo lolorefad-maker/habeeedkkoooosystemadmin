@@ -109,6 +109,8 @@ export interface Floor {
   branch: BranchInfo;
   shift: Shift | null;
   stations: Station[];
+  /** Deleted stations (id + name only), so old bookings still name their station. */
+  archivedStations?: { id: string; name: string }[];
   rules: RawRule[];
   packages: RawPackage[];
   reservations: Reservation[];

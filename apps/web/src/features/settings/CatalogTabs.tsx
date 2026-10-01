@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Pencil, Plus, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { TypeIcon, VipBadge } from '../../components/station/status';
 import { Button } from '../../components/ui/button';
+import { DeleteButton } from '../../components/ui/DeleteButton';
 import { useAction } from '../../components/ui/feedback';
 import { Modal } from '../../components/ui/overlays';
 import { Card, Field, Input, Money, Num, Select, Switch } from '../../components/ui/primitives';
@@ -159,9 +160,21 @@ export function StationsTab({ data }: { data: SettingsBundle }) {
           onOpenChange={(o) => !o && setEditing(null)}
           title={editing.id ? editing.form.name : t('settings.station.add')}
           footer={
-            <Button variant="primary" loading={busy} disabled={!editing.form.name.trim() || editing.form.modes.length === 0} onClick={save}>
-              {t('common.save')}
-            </Button>
+            <>
+              {editing.id && (
+                <DeleteButton
+                  className="sm:me-auto"
+                  label={t('settings.station.delete')}
+                  confirmTitle={t('settings.station.deleteConfirm', { name: editing.form.name })}
+                  body={t('settings.station.deleteBody')}
+                  path={`/api/settings/stations/${editing.id}`}
+                  onDeleted={() => setEditing(null)}
+                />
+              )}
+              <Button variant="primary" size="lg" loading={busy} disabled={!editing.form.name.trim() || editing.form.modes.length === 0} onClick={save}>
+                {t('common.save')}
+              </Button>
+            </>
           }
         >
           <div className="grid gap-4 sm:grid-cols-2">
@@ -288,9 +301,20 @@ export function ProductModal({ product, categories, onClose }: { product: Produc
       onOpenChange={(o) => !o && onClose()}
       title={product ? product.name : t('settings.product.add')}
       footer={
-        <Button variant="primary" size="lg" block loading={busy} disabled={!valid} onClick={save}>
-          {t('common.save')}
-        </Button>
+        <>
+          {product && (
+            <DeleteButton
+              label={t('settings.product.delete')}
+              confirmTitle={t('settings.product.deleteConfirm', { name: product.name })}
+              body={t('settings.product.deleteBody')}
+              path={`/api/settings/products/${product.id}`}
+              onDeleted={onClose}
+            />
+          )}
+          <Button variant="primary" size="lg" className="flex-1" loading={busy} disabled={!valid} onClick={save}>
+            {t('common.save')}
+          </Button>
+        </>
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">

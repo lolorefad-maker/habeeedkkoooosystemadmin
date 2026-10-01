@@ -1,5 +1,5 @@
 import { DomainError, branchSettingsSchema, packageMatchSchema, parseBranchSettings, ruleEffectSchema, ruleMatchSchema } from '@lounge/core';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext } from '../context';
 import type { Q } from '../db';
@@ -90,10 +90,10 @@ export type SetupFile = z.infer<typeof setupFileSchema>;
 export async function exportSetup(q: Q, actor: Actor, now: number): Promise<SetupFile> {
   const branch = await getBranch(q, actor.branchId);
   const [st, rules, pkgs, prods, ctrls] = await Promise.all([
-    q.select().from(stations).where(eq(stations.branchId, branch.id)),
+    q.select().from(stations).where(and(eq(stations.branchId, branch.id), isNull(stations.archivedAt))),
     listCurrentRules(q, branch.id, now),
     q.select().from(packages).where(eq(packages.branchId, branch.id)),
-    q.select().from(products).where(eq(products.branchId, branch.id)),
+    q.select().from(products).where(and(eq(products.branchId, branch.id), isNull(products.archivedAt))),
     q.select().from(controllers).where(eq(controllers.branchId, branch.id)),
   ]);
   const nameOf = new Map(st.map((s) => [s.id, s.name]));
@@ -140,8 +140,16 @@ export async function importSetup(ctx: AppContext, actor: Actor, raw: unknown) {
   return mutate(ctx, actor, async (tx, record) => {
     const now = new Date(ctx.clock.now());
     const branchId = actor.branchId;
-    const [hasStation] = await tx.select({ id: stations.id }).from(stations).where(eq(stations.branchId, branchId)).limit(1);
-    const [hasProduct] = await tx.select({ id: products.id }).from(products).where(eq(products.branchId, branchId)).limit(1);
+    const [hasStation] = await tx
+      .select({ id: stations.id })
+      .from(stations)
+      .where(and(eq(stations.branchId, branchId), isNull(stations.archivedAt)))
+      .limit(1);
+    const [hasProduct] = await tx
+      .select({ id: products.id })
+      .from(products)
+      .where(and(eq(products.branchId, branchId), isNull(products.archivedAt)))
+      .limit(1);
     const [hasSession] = await tx.select({ id: sessions.id }).from(sessions).where(eq(sessions.branchId, branchId)).limit(1);
     const [hasPayment] = await tx.select({ id: payments.id }).from(payments).where(eq(payments.branchId, branchId)).limit(1);
     if (hasStation || hasProduct || hasSession || hasPayment) {

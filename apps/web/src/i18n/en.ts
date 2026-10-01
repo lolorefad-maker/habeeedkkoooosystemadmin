@@ -22,7 +22,7 @@ export const en: Dict = {
   },
   common: {
     save: 'Save', cancel: 'Cancel', close: 'Close', confirm: 'Confirm', back: 'Back', edit: 'Edit', add: 'Add', search: 'Search',
-    all: 'All', yes: 'Yes', no: 'No', optional: 'Optional', loading: 'Loading…', retry: 'Retry', minutes: 'minutes', min: 'm',
+    all: 'All', yes: 'Yes', no: 'No', optional: 'Optional', delete: 'Delete', deleted: 'Deleted', loading: 'Loading…', retry: 'Retry', minutes: 'minutes', min: 'm',
     hour: 'hour', perHour: '/hr', total: 'Total', reason: 'Reason', note: 'Note', print: 'Print', done: 'Done', name: 'Name',
     phone: 'Phone', status: 'Status', active: 'Active', inactive: 'Inactive', none: 'None', system: 'System', today: 'Today',
     tomorrow: 'Tomorrow', now: 'Now', more: 'More', saved: 'Saved', new: 'New', theme: 'Theme', dark: 'Dark', light: 'Light',
@@ -82,6 +82,7 @@ export const en: Dict = {
     chargedToast: 'Controller {n} is charged and ready', chargingToast: 'Controller {n} charging — ready at {time}',
     ready: 'Ready', inUse: 'At stations', empty: 'No controllers yet. Add your numbered controllers.',
     swapHint: 'Pick a ready controller to replace it', skip: 'No replacement',
+    delete: 'Delete controller', deleteConfirm: 'Delete controller {n}?', deleteBody: 'It is removed from the controllers list for good.',
   },
   discount: {
     button: 'Discount', title: 'Discount now', hint: 'Starts right away on the stations you pick, and stops whenever you want.',
@@ -127,6 +128,7 @@ export const en: Dict = {
     refund: 'Refund deposit', checkIn: 'Check in', empty: 'No reservations on this day', upcoming: 'Upcoming',
     statuses: { confirmed: 'Confirmed', checked_in: 'Checked in', cancelled: 'Cancelled', no_show: 'No-show', completed: 'Completed' },
     created: 'Reservation created',
+    delete: 'Delete booking', deleteConfirm: 'Delete the booking for {name}?', deleteBody: 'It leaves the bookings and the floor, and the station is free at that time again.',
   },
   shift: {
     title: 'Shift', open: 'Open shift', close: 'Close shift', float: 'Opening cash in drawer', expected: 'Expected in drawer',
@@ -162,6 +164,8 @@ export const en: Dict = {
       orderHint: 'Use the arrows to put the stations in the order they stand in the shop — the floor shows them the same way.',
       noZone: 'No zone', moveUp: 'Move {name} up', moveDown: 'Move {name} down',
       activeHint: 'The station is on the floor and can be opened. This is not the same as pausing play time — that is done from the station itself.',
+      delete: 'Delete station', deleteConfirm: 'Delete {name}?',
+      deleteBody: 'It leaves the floor, settings and bookings. Past sessions and bills stay in the ledger under its name.',
     },
     rule: {
       add: 'Add price rule', name: 'Rule name', priority: 'Priority', priorityHint: 'When two rules clash, the higher priority wins',
@@ -178,6 +182,8 @@ export const en: Dict = {
       stockNewHint: 'Type how many you have now (e.g. 24)', categoryHint: 'e.g. Cold drinks, Snacks',
       lowStockAt: 'Warn me when', lowStockHint: 'A "running low" warning shows at this count',
       priceInvalid: 'Type the price in numbers only, like {example}',
+      delete: 'Delete product', deleteConfirm: 'Delete {name}?',
+      deleteBody: 'It leaves the drink buttons, settings and stock. What was sold stays on the bills and in the ledger.',
     },
     staffForm: { add: 'Add staff', role: 'Role', pin: 'Login PIN (4–8 digits)', pinKeep: 'Leave empty to keep the current PIN' },
     policy: {
@@ -207,7 +213,7 @@ export const en: Dict = {
     'order.item_voided': 'Item voided', 'bill.paid': 'Bill paid',
     'reservation.created': 'Reservation created', 'reservation.cancelled': 'Reservation cancelled', 'reservation.no_show': 'No-show',
     'reservation.checked_in': 'Checked in', 'reservation.refunded': 'Deposit refunded', 'shift.opened': 'Shift opened',
-    'shift.closed': 'Shift closed', 'day.closed': 'Day ended', 'setup.imported': 'Setup imported', 'settings.updated': 'Settings changed', 'station.created': 'Station added',
+    'shift.closed': 'Shift closed', 'day.closed': 'Day ended', 'setup.imported': 'Setup imported', 'station.deleted': 'Station deleted', 'product.deleted': 'Product deleted', 'controller.deleted': 'Controller deleted', 'reservation.deleted': 'Booking deleted', 'settings.updated': 'Settings changed', 'station.created': 'Station added',
     'station.updated': 'Station changed', 'pricing_rule.created': 'Price rule added', 'pricing_rule.updated': 'Price rule changed',
     'package.created': 'Package added', 'package.updated': 'Package changed', 'product.created': 'Product added',
     'product.updated': 'Product changed', 'staff.created': 'Staff added', 'staff.updated': 'Staff changed',
@@ -239,6 +245,12 @@ export const en: Dict = {
     rule_ended: 'This price was already replaced by a newer one — reopen the list',
     weak_pin: 'Owner and manager PINs must be at least 6 digits',
     controller_charging: 'That controller is still charging', controller_broken: 'That controller is broken',
+    controller_in_use: 'That controller is with a station — put it back on the shelf first',
+    station_has_session: 'A session on this station is open or unpaid — end and settle it first',
+    station_booked: 'This station has an upcoming booking — cancel it first',
+    reservation_has_deposit: 'This booking holds a deposit — cancel it first to settle the deposit',
+    reservation_refund_due: 'Give the deposit back to the customer first',
+    reservation_in_use: 'The customer is playing — end the session instead',
     controller_not_charging: 'That controller is not charging',
   },
 };

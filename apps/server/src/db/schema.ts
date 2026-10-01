@@ -82,6 +82,8 @@ export const stations = pgTable(
     /** Hardware control config (smart plug / TV) — Phase 3. */
     device: jsonb('device').$type<Record<string, unknown> | null>(),
     active: boolean('active').notNull().default(true),
+    /** "Deleted" by the owner: gone from every list, kept so past sessions and bills keep its name. */
+    archivedAt: ts('archived_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -198,6 +200,8 @@ export const products = pgTable('products', {
   packSize: integer('pack_size'),
   active: boolean('active').notNull().default(true),
   sort: integer('sort').notNull().default(0),
+  /** "Deleted" by the owner: gone from every list; sold items keep their own name and price. */
+  archivedAt: ts('archived_at'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -343,6 +347,8 @@ export const reservations = pgTable(
     refunded: integer('refunded').notNull().default(0),
     cancelledAt: ts('cancelled_at'),
     note: text('note'),
+    /** "Deleted" from the bookings list. Any deposit money stays in the ledger. */
+    archivedAt: ts('archived_at'),
     createdBy: uuid('created_by'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

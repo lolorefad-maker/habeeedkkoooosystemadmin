@@ -49,6 +49,20 @@ export async function addControllers(ctx: AppContext, actor: Actor, raw: unknown
   });
 }
 
+/**
+ * Delete a controller for good (lost, broken beyond repair). Nothing about money points at a
+ * controller, so the row goes; its number is free to be added again. Not while a customer has it.
+ */
+export async function deleteController(ctx: AppContext, actor: Actor, id: string) {
+  return mutate(ctx, actor, async (tx, record) => {
+    const c = await getController(tx, actor.branchId, id);
+    if (c.stationId) throw new DomainError('controller_in_use', `Controller ${c.number} is with a station — put it back on the shelf first`, { number: c.number });
+    await tx.delete(controllers).where(eq(controllers.id, id));
+    await record({ type: 'controller.deleted', entity: 'controller', entityId: id, payload: { number: c.number } });
+    return { id, number: c.number };
+  });
+}
+
 /** "The battery died": off the station, onto the charger, ready again after the branch's charge time. */
 export async function chargeController(ctx: AppContext, actor: Actor, id: string, raw: unknown) {
   const input = chargeInput.parse(raw ?? {});

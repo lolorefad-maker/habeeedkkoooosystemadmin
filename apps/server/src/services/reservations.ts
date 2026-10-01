@@ -6,7 +6,7 @@ import {
   noShowOutcome,
   overlaps,
 } from '@lounge/core';
-import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext } from '../context';
 import type { Q } from '../db';
@@ -188,11 +188,48 @@ export async function refundReservation(ctx: AppContext, actor: Actor, id: strin
   });
 }
 
+/**
+ * Delete a booking from the list (a mistake, a test, an old cancelled one). Money is never lost:
+ * a booking still holding a deposit must be cancelled first (that settles the deposit), and one whose
+ * deposit is still owed back must be refunded first. The row is kept (archived) for the audit trail.
+ */
+export async function deleteReservation(ctx: AppContext, actor: Actor, id: string) {
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = new Date(ctx.clock.now());
+    const r = await getReservation(tx, actor.branchId, id);
+    if (r.archivedAt) throw notFound('reservation');
+    if (r.status === 'checked_in') throw new DomainError('reservation_in_use', 'The customer is playing — end the session instead');
+    if (r.status === 'confirmed' && r.deposit > 0) throw new DomainError('reservation_has_deposit', 'Cancel the booking first, to settle its deposit');
+    if (r.deposit - r.fee - r.refunded > 0 && (r.status === 'cancelled' || r.status === 'no_show')) {
+      throw new DomainError('reservation_refund_due', 'Give the deposit back first');
+    }
+    await tx
+      .update(reservations)
+      .set({
+        // A booking deleted before its time frees the station like a cancellation.
+        ...(r.status === 'confirmed' ? { status: 'cancelled' as const, cancelledAt: now } : {}),
+        archivedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(reservations.id, id));
+    await record({ type: 'reservation.deleted', entity: 'reservation', entityId: id, payload: { customerName: r.customerName, status: r.status } });
+    return { id };
+  });
+}
+
+/** The bookings list — without the deleted ones. */
 export async function listReservations(q: Q, branchId: string, from: number, to: number) {
   return q
     .select()
     .from(reservations)
-    .where(and(eq(reservations.branchId, branchId), gte(reservations.startAt, new Date(from)), lt(reservations.startAt, new Date(to))))
+    .where(
+      and(
+        eq(reservations.branchId, branchId),
+        isNull(reservations.archivedAt),
+        gte(reservations.startAt, new Date(from)),
+        lt(reservations.startAt, new Date(to)),
+      ),
+    )
     .orderBy(asc(reservations.startAt));
 }
 

@@ -5,7 +5,7 @@ import { orderItems, orders, payments, reservations, sessions } from '../db/sche
 import { currentDay, getBranch, loadSegments } from './common';
 import { listControllers } from './controllers';
 import { currentShift } from './shifts';
-import { listPackages, listRules, listStations } from './settings';
+import { listArchivedStations, listPackages, listRules, listStations } from './settings';
 
 /**
  * Everything a floor screen needs in one round trip. Clients compute live timers and
@@ -14,9 +14,10 @@ import { listPackages, listRules, listStations } from './settings';
  */
 export async function floorSnapshot(q: Q, branchId: string, now: number) {
   const branch = await getBranch(q, branchId);
-  const [day, stationRows, rules, pkgs, shift, controllerRows] = await Promise.all([
+  const [day, stationRows, archivedStations, rules, pkgs, shift, controllerRows] = await Promise.all([
     currentDay(q, branch, now),
     listStations(q, branchId),
+    listArchivedStations(q, branchId),
     listRules(q, branchId),
     listPackages(q, branchId),
     currentShift(q, branchId),
@@ -78,6 +79,8 @@ export async function floorSnapshot(q: Q, branchId: string, now: number) {
     },
     shift,
     stations: stationRows,
+    /** Deleted stations (id + name), so past sessions in the ledger still name their station. */
+    archivedStations,
     rules,
     packages: pkgs,
     reservations: upcoming.map((r) => ({ ...r, startAt: r.startAt.getTime() })),
