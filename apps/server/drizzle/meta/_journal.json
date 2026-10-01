@@ -36,6 +36,13 @@
       "when": 1790870741842,
       "tag": "0004_green_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790895504212,
+      "tag": "0005_absent_nitro",
+      "breakpoints": true
     }
   ]
 }

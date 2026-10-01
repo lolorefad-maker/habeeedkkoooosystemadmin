@@ -107,7 +107,11 @@ export function EndDayDialog({ report, onClose, onPrintDay }: { report: DayRepor
         {/* 1. What the day made */}
         <section className="rounded-card border border-line p-4">
           <div className="text-sm text-muted">{t('ledger.dayIncome')}</div>
-          <Money value={report.revenue.total} currency className="mt-1 text-4xl font-bold tracking-tight" />
+          {/* What gets saved: paid bills plus what the stations still open earned up to now. */}
+          <Money value={report.revenue.total + report.openSessions.runningValue} currency className="mt-1 text-4xl font-bold tracking-tight" />
+          {report.openSessions.runningValue > 0 && (
+            <div className="mt-1 text-xs text-muted">{t('endDay.openShare', { amount: f.money(report.openSessions.runningValue) })}</div>
+          )}
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1">
             <Row label={<span className="flex items-center gap-2"><Banknote className="size-4" />{t('checkout.cash')}</span>} value={<Money value={report.payments.byMethod.cash ?? 0} className="font-semibold text-fg" />} />
             <Row label={<span className="flex items-center gap-2"><CreditCard className="size-4" />{t('checkout.card')}</span>} value={<Money value={report.payments.byMethod.card ?? 0} className="font-semibold text-fg" />} />

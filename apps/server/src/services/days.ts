@@ -30,7 +30,8 @@ import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { currentDay, getBranch, loadBillingContext, loadSegments, openShift, toTimeline, type Branch } from './common';
-import { closeOpenShift, closeShiftInput } from './shifts';
+import { carriedSoFar, carriesOnDays, carryOpenSessions } from './carries';
+import { closeOpenShift, closeShiftInput, rollShiftAtDayEnd } from './shifts';
 
 export const closeDayInput = z.object({
   counts: z
@@ -62,14 +63,30 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
       .where(and(eq(stockMovements.branchId, branch.id), eq(stockMovements.businessDay, day), eq(stockMovements.reason, 'count'))),
   ]);
 
-  // Revenue
-  const revenue = { bills: dayBills.length, time: 0, items: 0, discounts: 0, rounding: 0, total: 0 };
+  // Revenue: the day's bills, minus what an earlier day already counted for them (a session that
+  // ran past that day's end), plus what this day earned on sessions still open when it closed.
+  const revenue = { bills: dayBills.length, time: 0, items: 0, discounts: 0, rounding: 0, total: 0, carriedIn: 0, carriedOut: 0 };
   for (const b of dayBills) {
     revenue.time += b.timeCharge;
     revenue.items += b.itemsTotal;
     revenue.discounts += b.discountAmount;
     revenue.rounding += b.rounding;
     revenue.total += b.total;
+  }
+  const billedSessions = dayBills.map((b) => b.sessionId).filter((x): x is string => !!x);
+  const [earlier, here] = await Promise.all([carriedSoFar(q, billedSessions), carriesOnDays(q, branch.id, [day])]);
+  for (const c of earlier.values()) {
+    revenue.time -= c.time;
+    revenue.items -= c.items;
+    revenue.total -= c.time + c.items;
+    revenue.carriedOut += c.time + c.items;
+  }
+  for (const c of here) {
+    // A session billed on this same day never has a carry here (a day only carries what stays open).
+    revenue.time += c.time;
+    revenue.items += c.items;
+    revenue.total += c.time + c.items;
+    revenue.carriedIn += c.time + c.items;
   }
 
   // Money movements
@@ -95,7 +112,25 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
       perStation.set(l.stationId, cur);
     }
   }
+  const sessionStation = new Map<string, string>();
+  const carrySessions = [...new Set([...billedSessions, ...here.map((c) => c.sessionId)])];
+  if (carrySessions.length) {
+    for (const s of await q.select({ id: sessions.id, stationId: sessions.stationId }).from(sessions).where(inArray(sessions.id, carrySessions))) {
+      sessionStation.set(s.id, s.stationId);
+    }
+  }
+  const shiftStation = (sessionId: string, minutes: number, amount: number) => {
+    const stationId = sessionStation.get(sessionId);
+    if (!stationId) return;
+    const cur = perStation.get(stationId) ?? { minutes: 0, amount: 0 };
+    cur.minutes += minutes;
+    cur.amount += amount;
+    perStation.set(stationId, cur);
+  };
+  for (const [sessionId, c] of earlier) shiftStation(sessionId, -c.ms / 60_000, -c.time);
+  for (const c of here) shiftStation(c.sessionId, c.ms / 60_000, c.time);
   const stationRows = [...perStation.entries()]
+    .filter(([, v]) => Math.round(v.minutes) !== 0 || v.amount !== 0)
     .map(([stationId, v]) => {
       const s = stationMap.get(stationId);
       return { stationId, name: s?.name ?? '?', type: s?.type ?? '', tier: s?.tier ?? '', minutes: Math.round(v.minutes), amount: v.amount };
@@ -152,8 +187,18 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
   if (open.length) {
     const bctx = await loadBillingContext(q, branch);
     const segs = await loadSegments(q, open.map((s) => s.id));
+    const carried = await carriedSoFar(q, open.map((s) => s.id));
+    // Drinks already on their accounts count too: at the day's end all of it is this day's income.
+    const openItems = await q
+      .select({ qty: orderItems.qty, unitPrice: orderItems.unitPrice })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(and(inArray(orders.sessionId, open.map((s) => s.id)), eq(orders.status, 'open'), eq(orderItems.voided, false)));
+    runningValue += openItems.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
     for (const s of open) {
       const asOf = s.status === 'running' ? now : (s.endedAt?.getTime() ?? now);
+      const c = carried.get(s.id);
+      runningValue -= (c?.time ?? 0) + (c?.items ?? 0);
       try {
         runningValue += computeTimeBill(toTimeline(s, segs.get(s.id) ?? []), bctx, asOf).total;
       } catch {
@@ -203,6 +248,7 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
       expectedCash: s.expectedCash,
       countedCash: s.countedCash,
       variance: s.variance,
+      auto: !!s.closedAt && !s.closedBy,
     })),
     stock: counts.map((c) => {
       const p = productMap.get(c.productId);
@@ -243,6 +289,16 @@ async function closeAndRoll(
       });
     }
 
+    // Sessions still open: what they earned by the day's end is this day's income. At the automatic
+    // close that is the cutoff itself (midnight), even if the server only notices a bit later.
+    const asOf = opts.auto ? Math.min(now, businessDayRange(day, branch.timezone, branch.settings.day.cutoff).end) : now;
+    await carryOpenSessions(tx, branch, day, asOf);
+
+    const clockDay = businessDayOf(now, branch.timezone, branch.settings.day.cutoff);
+    const next = clockDay > day ? clockDay : nextDay(day);
+    // Midnight with the drawer open: close it uncounted and carry its cash into a new shift.
+    const rolled = opts.auto ? await rollShiftAtDayEnd(tx, record, branch.id, next, now) : null;
+
     await tx
       .update(businessDays)
       .set({ status: 'closed', closedAt: new Date(now), closedBy: actor.id, auto: opts.auto })
@@ -253,8 +309,6 @@ async function closeAndRoll(
       .set({ report: report as unknown as Record<string, unknown> })
       .where(and(eq(businessDays.branchId, branch.id), eq(businessDays.day, day)));
 
-    const clockDay = businessDayOf(now, branch.timezone, branch.settings.day.cutoff);
-    const next = clockDay > day ? clockDay : nextDay(day);
     await tx
       .insert(businessDays)
       .values({ id: newId(), branchId: branch.id, day: next, status: 'open', openedAt: new Date(now) })
@@ -266,7 +320,7 @@ async function closeAndRoll(
     await record({
       type: 'day.closed',
       entity: 'day',
-      payload: { day, next, auto: opts.auto, total: report.revenue.total, net: report.payments.net },
+      payload: { day, next, auto: opts.auto, total: report.revenue.total, net: report.payments.net, shiftRolled: !!rolled },
     });
     return { day, next, report };
   });
@@ -285,7 +339,10 @@ export async function closeDay(ctx: AppContext, actor: Actor, raw: unknown) {
   return closeAndRoll(ctx, actor, { auto: false, counts: input.counts, shift: shiftOpen ? input.shift : null });
 }
 
-/** Scheduler: at the cutoff, close a day nobody closed. Open shifts and sessions simply carry on. */
+/**
+ * Scheduler: at the cutoff (midnight by default in the shop), close a day nobody closed. Sessions
+ * carry on (their share so far stays with the closing day); an open shift is rolled into a new one.
+ */
 export async function autoRollover(ctx: AppContext, branchId: string): Promise<boolean> {
   const branch = await getBranch(ctx.db, branchId);
   if (!branch.settings.day.autoCloseDay) return false;

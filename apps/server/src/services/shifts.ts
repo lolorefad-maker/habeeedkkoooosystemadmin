@@ -67,6 +67,34 @@ export async function endShift(ctx: AppContext, actor: Actor, raw: unknown) {
   return mutate(ctx, actor, (tx, record) => closeOpenShift(tx, record, actor, input, ctx.clock.now()));
 }
 
+/**
+ * The day ended by itself (midnight) with a shift open: close it without a count — nobody counted —
+ * and hand the drawer to a new shift on the new day that starts with the cash that is in it. The
+ * cashier can count and close that shift whenever they like.
+ */
+export async function rollShiftAtDayEnd(tx: Q, record: Record_, branchId: string, nextDay: string, now: number) {
+  const s = await openShift(tx, branchId);
+  if (!s) return null;
+  const summary = (await shiftSummary(tx, s.id))!;
+  await tx
+    .update(shifts)
+    .set({ status: 'closed', closedAt: new Date(now), closedBy: null, expectedCash: summary.expectedCash, countedCash: null, variance: null })
+    .where(and(eq(shifts.id, s.id), eq(shifts.status, 'open')));
+  await record({ type: 'shift.closed', entity: 'shift', entityId: s.id, payload: { expectedCash: summary.expectedCash, auto: true } });
+  const id = newId();
+  await tx.insert(shifts).values({
+    id,
+    branchId,
+    userId: s.userId,
+    businessDay: nextDay,
+    status: 'open',
+    openedAt: new Date(now),
+    openingFloat: summary.expectedCash,
+  });
+  await record({ type: 'shift.opened', entity: 'shift', entityId: id, payload: { openingFloat: summary.expectedCash, auto: true, from: s.id } });
+  return { closed: s.id, opened: id, carriedCash: summary.expectedCash };
+}
+
 /** Count the drawer and close the open shift, inside the caller's transaction (also used by "end the day"). */
 export async function closeOpenShift(tx: Q, record: Record_, actor: Actor, input: z.infer<typeof closeShiftInput>, now: number) {
   const s = await openShift(tx, actor.branchId);

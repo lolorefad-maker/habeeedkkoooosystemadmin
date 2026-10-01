@@ -399,6 +399,28 @@ export const controllers = pgTable(
   (t) => [uniqueIndex('controllers_branch_number_uq').on(t.branchId, t.number)],
 );
 
+/**
+ * A session still open when a business day closed (e.g. playing 9 pm → 3 am across midnight): what it
+ * had earned by the day's end — time played and drinks taken — belongs to that day's income. Its
+ * bill, paid on a later day, counts only the rest there. A void writes the negative back.
+ */
+export const dayCarries = pgTable(
+  'day_carries',
+  {
+    id: uuid('id').primaryKey(),
+    branchId: uuid('branch_id').notNull().references(() => branches.id),
+    sessionId: uuid('session_id').notNull(),
+    /** The business day this part belongs to. */
+    businessDay: text('business_day').notNull(),
+    time: integer('time').notNull(),
+    items: integer('items').notNull(),
+    /** Play time in this part (for the stations' minutes). */
+    ms: integer('ms').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index('day_carries_branch_day_idx').on(t.branchId, t.businessDay), index('day_carries_session_idx').on(t.sessionId)],
+);
+
 /** One row per business day. Exactly one is open per branch; closing it opens the next. */
 export const businessDays = pgTable(
   'business_days',

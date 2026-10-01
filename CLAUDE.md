@@ -4,7 +4,9 @@ Monorepo (npm workspaces): `packages/core` (pure domain engine), `apps/server` (
 
 ## How the shop works (owner's words — design around it)
 
-Everything is on the **device (station)**: when a station is opened the owner records time, the numbered controllers handed over, drinks/food, and what was paid (cash or visa, just recorded). Drinks are added later from the same device sheet. **No kitchen, no separate cafeteria/walk-in screen.** The bill is play time × hourly rate + drinks − paid.
+Everything is on the **device (station)**: when a station is opened the owner records time, the numbered controllers handed over, drinks/food, and what was paid (cash or visa, just recorded). Drinks are added later from the same device sheet. **No kitchen.** The **Cafeteria** page (cashier) sells to someone not on a device, paid on the spot (`POST /api/counter/sale`). The bill is play time × hourly rate + drinks − paid.
+
+**The day ends at midnight** (cutoff `00:00`, closes by itself): a station playing then is split — what it earned by midnight is that day's income (`day_carries`), the rest counts on the day it is paid; the money is always the day/shift that received it. At the automatic close an open shift is closed uncounted and its cash carried into a new shift.
 
 ## Rules that keep the system correct
 

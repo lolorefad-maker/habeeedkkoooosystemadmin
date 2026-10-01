@@ -3,6 +3,7 @@ import {
   BarChart3,
   BatteryFull,
   Boxes,
+  Coffee,
   CalendarDays,
   Gamepad,
   Globe,
@@ -44,6 +45,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/floor', label: 'nav.floor', icon: LayoutGrid, mobile: true },
+  { to: '/cafe', label: 'nav.cafe', icon: Coffee, allow: can.checkout, mobile: true },
   { to: '/controllers', label: 'nav.controllers', icon: Gamepad, mobile: true },
   { to: '/reservations', label: 'nav.reservations', icon: CalendarDays, allow: can.reservations, mobile: true },
   { to: '/stock', label: 'nav.stock', icon: Boxes, allow: can.reports, mobile: true },
@@ -63,6 +65,7 @@ export function AppShell() {
   const floor = useFloor();
   const conn = useConn((s) => s.status);
   const items = NAV.filter((n) => !n.allow || n.allow(user?.role));
+  const mobileCount = items.filter((n) => n.mobile).length;
 
   return (
     <div className="flex h-full min-h-0">
@@ -130,7 +133,11 @@ export function AppShell() {
                 key={n.to}
                 to={n.to}
                 className={({ isActive }) =>
-                  clsx('flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 text-[11px] font-medium', isActive ? 'text-accent' : 'text-muted')
+                  clsx(
+                    'flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 font-medium',
+                    mobileCount > 5 ? 'text-[10px]' : 'text-[11px]',
+                    isActive ? 'text-accent' : 'text-muted',
+                  )
                 }
               >
                 <n.icon className="size-5 shrink-0" aria-hidden />

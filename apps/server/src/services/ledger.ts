@@ -2,7 +2,8 @@ import type { TimeBill } from '@lounge/core';
 import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { Q } from '../db';
-import { bills, payments } from '../db/schema';
+import { bills, payments, sessions, stations } from '../db/schema';
+import { carriedSoFar, carriesOnDays } from './carries';
 
 /** Money received per method, from the payments table (prepaid, during play, at checkout, deposits, refunds). */
 function byMethod(rows: { method: string; amount: number }[]) {
@@ -13,7 +14,9 @@ function byMethod(rows: { method: string; amount: number }[]) {
 
 /**
  * Daily log: every device session paid on this business day — which device, from when to when,
- * how long, time charge, what they took, the total, and how it was paid.
+ * how long, time charge, what they took, the total, and how it was paid — and every cafeteria sale.
+ * A session that ran past an earlier day's end shows what that day already counted (`carriedOut`);
+ * a session still open at this day's end shows as a `carried` row with this day's share.
  */
 export async function sessionsLog(q: Q, branchId: string, day: string) {
   const rows = await q
@@ -28,7 +31,9 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
         .where(inArray(payments.billId, rows.map((b) => b.id)))
     : [];
 
-  return rows.map((b) => {
+  const earlier = await carriedSoFar(q, rows.map((b) => b.sessionId).filter((x): x is string => !!x));
+
+  const billRows = rows.map((b) => {
     const bd = b.breakdown as {
       time?: TimeBill | null;
       items?: { name: string; qty: number; voided?: boolean }[];
@@ -36,6 +41,7 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
       stationName?: string | null;
       startedAt?: number;
       endedAt?: number;
+      counter?: boolean;
     };
     const items = new Map<string, number>();
     for (const i of bd.items ?? []) if (!i.voided) items.set(i.name, (items.get(i.name) ?? 0) + i.qty);
@@ -53,8 +59,49 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
       discount: b.discountAmount,
       total: b.total,
       paidByMethod: byMethod(pays.filter((p) => p.billId === b.id)),
+      /** A cafeteria sale (no device). */
+      counter: !!bd.counter,
+      /** Already counted on an earlier day (what was played and taken before that day ended). */
+      carriedOutTime: b.sessionId ? (earlier.get(b.sessionId)?.time ?? 0) : 0,
+      carriedOutItems: b.sessionId ? (earlier.get(b.sessionId)?.items ?? 0) : 0,
+      carried: false,
     };
   });
+
+  // Sessions that were still open when this day ended: this day's share of them.
+  const carries = await carriesOnDays(q, branchId, [day]);
+  const carriedRows = [];
+  if (carries.length) {
+    const sess = await q
+      .select({ id: sessions.id, label: sessions.label, startedAt: sessions.startedAt, stationName: stations.name })
+      .from(sessions)
+      .leftJoin(stations, eq(stations.id, sessions.stationId))
+      .where(inArray(sessions.id, carries.map((c) => c.sessionId)));
+    const byId = new Map(sess.map((x) => [x.id, x]));
+    for (const c of carries) {
+      const x = byId.get(c.sessionId);
+      carriedRows.push({
+        billId: c.id,
+        number: 0,
+        stationName: x?.stationName ?? null,
+        label: x?.label ?? null,
+        startedAt: x?.startedAt.getTime() ?? null,
+        endedAt: null,
+        playedMs: c.ms,
+        timeCharge: c.time,
+        items: [] as { name: string; qty: number }[],
+        itemsTotal: c.items,
+        discount: 0,
+        total: c.time + c.items,
+        paidByMethod: {} as Record<string, number>,
+        counter: false,
+        carriedOutTime: 0,
+        carriedOutItems: 0,
+        carried: true,
+      });
+    }
+  }
+  return [...billRows, ...carriedRows];
 }
 
 /** Monthly: one row per business day with what came in, plus month totals. `month` = "YYYY-MM". */
@@ -67,6 +114,7 @@ export async function monthReport(q: Q, branchId: string, month: string) {
   const [monthBills, monthPayments] = await Promise.all([
     q
       .select({
+        sessionId: bills.sessionId,
         day: bills.businessDay,
         timeCharge: bills.timeCharge,
         itemsTotal: bills.itemsTotal,
@@ -102,6 +150,24 @@ export async function monthReport(q: Q, branchId: string, month: string) {
   for (const p of monthPayments) {
     const r = row(p.day);
     r.received[p.method] = (r.received[p.method] ?? 0) + p.amount;
+  }
+  // A session that ran past a day's end: its share goes to that day, the bill's day keeps the rest.
+  const earlier = await carriedSoFar(q, monthBills.map((b) => b.sessionId).filter((x): x is string => !!x));
+  for (const b of monthBills) {
+    const c = b.sessionId ? earlier.get(b.sessionId) : undefined;
+    if (!c) continue;
+    const r = row(b.day);
+    r.time -= c.time;
+    r.items -= c.items;
+    r.total -= c.time + c.items;
+  }
+  const monthDays: string[] = [];
+  for (let d = start; d < start.plus({ months: 1 }); d = d.plus({ days: 1 })) monthDays.push(d.toISODate()!);
+  for (const c of await carriesOnDays(q, branchId, monthDays)) {
+    const r = row(c.businessDay);
+    r.time += c.time;
+    r.items += c.items;
+    r.total += c.time + c.items;
   }
 
   const list = [...days.values()].sort((a, b) => a.day.localeCompare(b.day));

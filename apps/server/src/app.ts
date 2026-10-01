@@ -22,7 +22,7 @@ import {
   type Permission,
 } from './lib/auth';
 import { HttpError, notFound, unauthorized } from './lib/errors';
-import { checkoutSession, getBill } from './services/checkout';
+import { checkoutSession, counterSale, getBill } from './services/checkout';
 import { getBranch, getSession } from './services/common';
 import { closeDay, dayReport, listDays } from './services/days';
 import { floorSnapshot } from './services/floor';
@@ -236,6 +236,8 @@ export async function buildApp(ctx: AppContext) {
   // ------------------------------------------------------------------ drinks & food (always on a device's account)
   app.get('/api/products', route('floor.view', async (_req, actor) => listProducts(ctx.db, actor.branchId)));
   app.post('/api/orders', route('order.create', async (req, actor) => createOrder(ctx, actor, req.body)));
+  // Cafeteria: sell to someone who is not on a station, paid on the spot.
+  app.post('/api/counter/sale', route('checkout', async (req, actor) => counterSale(ctx, actor, req.body)));
   app.post('/api/order-items/:id/void', route('order.create', async (req, actor) => voidOrderItem(ctx, actor, id(req), req.body)));
 
   // ------------------------------------------------------------------ bills

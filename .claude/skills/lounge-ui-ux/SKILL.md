@@ -9,7 +9,7 @@ The product runs a gaming lounge in real time: stations (PS5 / VR, Regular / VIP
 live timers, numbered controllers, reservations, shifts and end-of-day. **Everything happens on
 the device**: opening a station takes time, controllers handed over, drinks/food and any
 up-front payment (cash / visa) in one sheet; drinks are added later from the same sheet. There is
-no separate kitchen or cafeteria screen — do not add one. Staff use it for
+no kitchen screen — do not add one. The one exception is the **Cafeteria** page: the cashier sells to someone not on a device, paid on the spot. Staff use it for
 8–12 hour shifts, often in dim rooms, often in a hurry, with customers waiting.
 Every design decision serves **speed, glanceability, and trust in the money.**
 

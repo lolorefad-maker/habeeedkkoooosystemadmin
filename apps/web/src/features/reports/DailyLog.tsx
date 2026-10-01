@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Banknote, CreditCard, Gamepad2, UserRound } from 'lucide-react';
+import { Banknote, Coffee, CreditCard, Gamepad2, MoonStar, UserRound } from 'lucide-react';
 import { useMemo } from 'react';
 import { Card, EmptyState, Money, Num, SectionTitle, Skeleton } from '../../components/ui/primitives';
 import { useT } from '../../i18n';
@@ -28,10 +28,24 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
   const ctx = useBillingContext(floor.data);
 
   const rows: Row[] = useMemo(() => {
-    const paid = (log.data ?? []).map((r) => ({ ...r, open: false, unpaid: false }));
+    // Every row shows this day's share: a bill whose session ran past an earlier day's end leaves
+    // out what that day already counted, so the column totals equal the day's income.
+    const paid = (log.data ?? []).map((r) => {
+      const outTime = r.carriedOutTime ?? 0;
+      const outItems = r.carriedOutItems ?? 0;
+      return {
+        ...r,
+        timeCharge: r.timeCharge - outTime,
+        itemsTotal: r.itemsTotal - outItems,
+        total: r.total - outTime - outItems,
+        open: false,
+        unpaid: false,
+      };
+    });
     if (!isOpenDay || !floor.data || !ctx) return paid;
     const open = floor.data.sessions.map((s): Row => {
       const bill = sessionBill(s, ctx, now);
+      const carried = s.carried ?? { time: 0, items: 0 };
       return {
         billId: s.id,
         number: 0,
@@ -40,11 +54,13 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
         startedAt: s.startedAt,
         endedAt: s.endedAt,
         playedMs: bill?.playedMs ?? 0,
-        timeCharge: bill?.total ?? 0,
+        timeCharge: (bill?.total ?? 0) - carried.time,
         items: [],
-        itemsTotal: s.itemsTotal,
+        itemsTotal: s.itemsTotal - carried.items,
         discount: 0,
-        total: (bill?.total ?? 0) + s.itemsTotal,
+        total: (bill?.total ?? 0) + s.itemsTotal - carried.time - carried.items,
+        carriedOutTime: carried.time,
+        carriedOutItems: carried.items,
         paidByMethod: s.paidByMethod,
         open: true,
         unpaid: s.status === 'ended',
@@ -89,7 +105,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                 {rows.map((r) => (
                   <tr key={r.billId} className={clsx('border-b border-line/70 align-top', r.open && 'bg-surface-2/70')}>
                     <td className="px-4 py-3">
-                      <div className="num font-semibold">{r.stationName ?? '—'}</div>
+                      <RowName r={r} />
                       {r.label && (
                         <div className="mt-0.5 flex items-center gap-1 text-xs text-muted">
                           <UserRound className="size-3" /> {r.label}
@@ -106,6 +122,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                           <span className="st-bg size-1.5 rounded-full" /> {r.unpaid ? t('status.unpaid') : t('ledger.stillOpen')}
                         </div>
                       )}
+                      <SplitNote r={r} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-end">{f.span(r.playedMs)}</td>
                     <td className="px-4 py-3 text-end">
@@ -164,9 +181,8 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
             {rows.map((r) => (
               <li key={r.billId} className={clsx('flex flex-col gap-1.5 px-4 py-3', r.open && 'bg-surface-2/70')}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="num font-semibold">
-                    {r.stationName}
-                    {r.label && <span className="ms-2 font-normal text-muted">{r.label}</span>}
+                  <span className="font-semibold">
+                    <RowName r={r} inline />
                   </span>
                   <Money value={r.total} className="font-semibold" />
                 </div>
@@ -181,12 +197,62 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                     {r.items.map((i) => `${i.qty}× ${i.name}`).join('، ')}
                   </div>
                 )}
+                <SplitNote r={r} />
               </li>
             ))}
           </ul>
         </>
       )}
     </Card>
+  );
+}
+
+/** "PS-01 · Ahmad", or "Cafeteria" for a sale with no device. */
+function RowName({ r, inline }: { r: Row; inline?: boolean }) {
+  const { t } = useT();
+  const name = r.counter ? (
+    <span className="inline-flex items-center gap-1.5">
+      <Coffee className="size-4 text-muted" /> {t('nav.cafe')}
+    </span>
+  ) : (
+    <span className="num">{r.stationName ?? '—'}</span>
+  );
+  if (inline) {
+    return (
+      <>
+        {name}
+        {r.label && <span className="ms-2 font-normal text-muted">{r.label}</span>}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="font-semibold">{name}</div>
+      {r.label && (
+        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+          <UserRound className="size-3" /> {r.label}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Why a row shows only part of a session: the day ended while it was playing. */
+function SplitNote({ r }: { r: Row }) {
+  const { t } = useT();
+  const out = (r.carriedOutTime ?? 0) + (r.carriedOutItems ?? 0);
+  if (r.carried) {
+    return (
+      <div className="mt-0.5 flex items-center gap-1 text-xs text-st-reserved">
+        <MoonStar className="size-3" /> {t('ledger.carriedRow')}
+      </div>
+    );
+  }
+  if (out === 0) return null;
+  return (
+    <div className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+      <MoonStar className="size-3" /> {t('ledger.carriedOutLabel')} <Money value={out} />
+    </div>
   );
 }
 

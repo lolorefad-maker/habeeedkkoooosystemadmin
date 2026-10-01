@@ -198,6 +198,9 @@ function DailyTab({
 /** What the owner asks first: how much came in, and how (cash / visa). */
 function DaySummary({ r }: { r: DayReport }) {
   const { t } = useT();
+  const f = useFmt();
+  const carriedIn = r.revenue.carriedIn ?? 0;
+  const carriedOut = r.revenue.carriedOut ?? 0;
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr] lg:gap-4">
       <Card className="relative overflow-hidden p-5">
@@ -213,6 +216,16 @@ function DaySummary({ r }: { r: DayReport }) {
             </>
           )}
         </div>
+        {/* A station that was playing when a day ended is split across the two days. */}
+        {(carriedIn !== 0 || carriedOut !== 0 || (r.status === 'open' && r.openSessions.runningValue > 0)) && (
+          <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted">
+            {carriedIn !== 0 && <li>{t('reports.carriedIn', { amount: f.money(carriedIn) })}</li>}
+            {carriedOut !== 0 && <li>{t('reports.carriedOut', { amount: f.money(carriedOut) })}</li>}
+            {r.status === 'open' && r.openSessions.runningValue > 0 && (
+              <li className="text-st-reserved">{t('reports.runningNow', { amount: f.money(r.openSessions.runningValue) })}</li>
+            )}
+          </ul>
+        )}
       </Card>
       <SummaryTile icon={<Banknote />} label={t('checkout.cash')} value={r.payments.byMethod.cash ?? 0} />
       <SummaryTile icon={<CreditCard />} label={t('checkout.card')} value={r.payments.byMethod.card ?? 0} />
@@ -331,6 +344,8 @@ function ReportView({ r }: { r: DayReport }) {
                     <span data-status={s.variance === 0 ? 'free' : s.variance < 0 ? 'overtime' : 'ending'} className="st-soft rounded-full px-2.5 py-1 text-xs font-semibold">
                       {s.variance === 0 ? t('shift.balanced') : s.variance < 0 ? t('shift.short') : t('shift.over')} {s.variance !== 0 && <Money value={Math.abs(s.variance)} />}
                     </span>
+                  ) : s.auto ? (
+                    <span className="max-w-[55%] text-end text-xs text-faint">{t('reports.autoShift')}</span>
                   ) : (
                     <span className="text-xs text-faint">{t('reports.open')}</span>
                   )}

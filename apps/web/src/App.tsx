@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { Toaster } from 'sonner';
 import { AppShell } from './components/shell/AppShell';
 import { ApprovalDialog } from './components/ui/feedback';
+import { CafePage } from './features/cafe/CafePage';
 import { ControllersPage } from './features/controllers/ControllersPage';
 import { DisplayPage } from './features/display/DisplayPage';
 import { FloorPage } from './features/floor/FloorPage';
@@ -78,6 +79,14 @@ export function App() {
                 element={
                   <RequireAuth allow={can.reports}>
                     <ReportsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/cafe"
+                element={
+                  <RequireAuth allow={can.checkout}>
+                    <CafePage />
                   </RequireAuth>
                 }
               />

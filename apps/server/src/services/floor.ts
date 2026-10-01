@@ -2,6 +2,7 @@ import { MINUTE } from '@lounge/core';
 import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import type { Q } from '../db';
 import { orderItems, orders, payments, reservations, sessions } from '../db/schema';
+import { carriedSoFar } from './carries';
 import { currentDay, getBranch, loadSegments } from './common';
 import { listControllers } from './controllers';
 import { currentShift } from './shifts';
@@ -30,6 +31,7 @@ export async function floorSnapshot(q: Q, branchId: string, now: number) {
     .where(and(eq(sessions.branchId, branchId), inArray(sessions.status, ['running', 'ended'])));
   const ids = live.map((s) => s.id);
   const segs = await loadSegments(q, ids);
+  const carried = await carriedSoFar(q, ids);
 
   const items = ids.length
     ? await q
@@ -118,6 +120,8 @@ export async function floorSnapshot(q: Q, branchId: string, now: number) {
         itemsTotal: its.reduce((a, i) => a + i.qty * i.unitPrice, 0),
         paid,
         paidByMethod,
+        /** Already counted in an earlier day's income (it ran past that day's end) — for the ledger only. */
+        carried: { time: carried.get(s.id)?.time ?? 0, items: carried.get(s.id)?.items ?? 0 },
         segments: (segs.get(s.id) ?? []).map((g) => ({
           stationId: g.stationId,
           mode: g.mode,

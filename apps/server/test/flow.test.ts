@@ -248,7 +248,9 @@ describe('end of day', () => {
     expect(day.status).toBe(200);
     const report = day.json.report;
     expect(report.revenue.bills).toBe(3);
-    expect(report.revenue.total).toBe(7600 + 1000 + 1000);
+    // Paid bills, plus what the stations still playing earned up to the close (that is this day's too).
+    expect(report.revenue.total - report.revenue.carriedIn).toBe(7600 + 1000 + 1000);
+    expect(report.revenue.carriedIn).toBeGreaterThan(0);
     expect(report.stock[0]).toMatchObject({ expected: 46, counted: 45, variance: -1 });
     expect(report.openSessions.count).toBeGreaterThan(0);
     expect(report.shifts[0].variance).toBe(-500);

@@ -30,6 +30,8 @@ export interface FloorSession {
   paid: number;
   paidByMethod: Record<string, number>;
   segments: Segment[];
+  /** Already counted in an earlier day's income (it ran past that day's end) — the ledger only. */
+  carried?: { time: number; items: number };
 }
 
 export interface Controller {
@@ -161,6 +163,13 @@ export interface LedgerRow {
   discount: number;
   total: number;
   paidByMethod: Record<string, number>;
+  /** A cafeteria sale (no device). */
+  counter?: boolean;
+  /** Part of this bill already counted on an earlier day (it ran past that day's end). */
+  carriedOutTime?: number;
+  carriedOutItems?: number;
+  /** Not a bill: this day's share of a session still open when the day ended. */
+  carried?: boolean;
 }
 
 export interface MonthDay {

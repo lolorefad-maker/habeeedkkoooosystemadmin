@@ -11,7 +11,7 @@ import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext, type Record_ } from '../context';
 import type { Q, Tx } from '../db';
-import { bills, branches, orders, payments, reservations, segments, sessions, stations } from '../db/schema';
+import { bills, branches, orderItems, orders, payments, reservations, segments, sessions, stations } from '../db/schema';
 import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -29,6 +29,7 @@ import {
   type Branch,
 } from './common';
 import { returnStationControllers } from './controllers';
+import { insertOrder, orderItemsInput } from './orders';
 import { sessionItems } from './sessions';
 
 const paymentInput = z.object({
@@ -262,6 +263,47 @@ export async function checkoutSession(ctx: AppContext, actor: Actor, sessionId: 
       await tx.update(reservations).set({ status: 'completed', updatedAt: new Date(now) }).where(eq(reservations.id, s.reservationId));
     }
     return result;
+  });
+}
+
+export const counterSaleInput = z.object({
+  items: orderItemsInput,
+  /** Optional name on the receipt ("Ahmad", "table 2"). */
+  label: z.string().trim().max(80).nullish(),
+  ...baseCheckout,
+});
+
+/**
+ * A cafeteria sale: drinks and snacks for someone who is not on a station, paid on the spot. One
+ * step — the items leave the stock, one bill is made and the money goes into the open shift's drawer.
+ */
+export async function counterSale(ctx: AppContext, actor: Actor, raw: unknown) {
+  const input = counterSaleInput.parse(raw);
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = ctx.clock.now();
+    const branch = await getBranch(tx, actor.branchId);
+    // Before touching the stock: no drawer, no sale.
+    if (input.payments.length > 0) await requireOpenShift(tx, branch.id);
+    const order = await insertOrder(tx, record, branch, actor, { sessionId: null, label: input.label ?? null, items: input.items }, now);
+    const items: ItemLine[] = await tx
+      .select({ id: orderItems.id, orderId: orderItems.orderId, name: orderItems.name, unitPrice: orderItems.unitPrice, qty: orderItems.qty, voided: orderItems.voided })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id));
+    const result = await finalize(tx, record, ctx, actor, branch, {
+      sessionId: null,
+      reservationId: null,
+      time: null,
+      items,
+      orderIds: [order.id],
+      paid: 0,
+      discount: input.discount ?? null,
+      discountReason: input.discountReason ?? null,
+      payments: input.payments,
+      approvalPin: input.approvalPin ?? null,
+      expectedTotal: input.expectedTotal,
+      extra: { counter: true, label: input.label ?? null, startedAt: now, endedAt: now },
+    });
+    return { ...result, stock: order.stock };
   });
 }
 

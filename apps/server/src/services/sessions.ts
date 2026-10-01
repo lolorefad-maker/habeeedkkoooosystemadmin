@@ -30,6 +30,7 @@ import {
 import { handOverControllers, moveStationControllers, returnStationControllers } from './controllers';
 import { insertOrder } from './orders';
 import { assertFree, assertUsable, getStation, holdingReservation } from './stations';
+import { reverseCarries } from './carries';
 
 export const startSessionInput = z.object({
   stationId: z.uuid(),
@@ -303,7 +304,10 @@ export async function voidSession(ctx: AppContext, actor: Actor, id: string, raw
         .where(and(eq(segments.sessionId, id), isNull(segments.endedAt)));
     }
     await tx.update(sessions).set({ status: 'void', endedAt: s.endedAt ?? new Date(now), updatedAt: new Date(now) }).where(eq(sessions.id, id));
-    if (s.status === 'running') await returnStationControllers(tx, record, await getBranch(tx, actor.branchId), s.stationId, now, id);
+    const branch = await getBranch(tx, actor.branchId);
+    // It ran past an earlier day's end and that day counted its share: today gives it back.
+    await reverseCarries(tx, branch.id, id, await currentDay(tx, branch, now));
+    if (s.status === 'running') await returnStationControllers(tx, record, branch, s.stationId, now, id);
     await record({ type: 'session.voided', entity: 'session', entityId: id, approvedBy, reason: input.reason });
     return { id };
   });
