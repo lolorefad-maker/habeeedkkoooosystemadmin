@@ -11,8 +11,10 @@ export function attachRealtime(server: HttpServer, ctx: AppContext) {
   const io = new Server(server, {
     path: '/ws',
     // Same origin only: the web app is served by this server.
-    pingInterval: 10_000,
-    pingTimeout: 8_000,
+    // Gentle on phones: a weak signal that stalls for a few seconds must not drop the connection
+    // (a dead one is still noticed within pingInterval + pingTimeout).
+    pingInterval: 12_000,
+    pingTimeout: 20_000,
   });
 
   io.use(async (socket, next) => {

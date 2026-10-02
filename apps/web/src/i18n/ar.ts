@@ -160,7 +160,7 @@ export const ar = {
   roles: { owner: 'مالك', manager: 'مدير', cashier: 'كاشير', waiter: 'ويتر' },
   conn: {
     online: 'متصل',
-    offline: 'انقطع الاتصال بالخادم — الإجراءات متوقفة حتى يعود',
+    offline: 'انقطع الاتصال بالخادم — الأرقام قد لا تكون محدّثة حتى يعود',
     reconnecting: 'جارٍ إعادة الاتصال…',
   },
   floor: {

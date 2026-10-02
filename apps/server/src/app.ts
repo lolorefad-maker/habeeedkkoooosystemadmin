@@ -364,9 +364,9 @@ export async function buildApp(ctx: AppContext) {
   app.post('/api/pricing/discount/stop', route('settings.manage', async (_req, actor) => stopQuickDiscount(ctx, actor)));
   app.post('/api/settings/packages', route('settings.manage', async (req, actor) => savePackage(ctx, actor, null, req.body)));
   app.put('/api/settings/packages/:id', route('settings.manage', async (req, actor) => savePackage(ctx, actor, id(req), req.body)));
-  app.post('/api/settings/products', route('settings.manage', async (req, actor) => saveProduct(ctx, actor, null, req.body)));
-  app.patch('/api/settings/products/:id', route('settings.manage', async (req, actor) => saveProduct(ctx, actor, id(req), req.body)));
-  app.delete('/api/settings/products/:id', route('settings.manage', async (req, actor) => deleteProduct(ctx, actor, id(req))));
+  app.post('/api/settings/products', route('stock.manage', async (req, actor) => saveProduct(ctx, actor, null, req.body)));
+  app.patch('/api/settings/products/:id', route('stock.manage', async (req, actor) => saveProduct(ctx, actor, id(req), req.body)));
+  app.delete('/api/settings/products/:id', route('stock.manage', async (req, actor) => deleteProduct(ctx, actor, id(req))));
   app.post('/api/settings/staff', route('staff.manage', async (req, actor) => saveStaff(ctx, actor, null, req.body)));
   app.patch('/api/settings/staff/:id', route('staff.manage', async (req, actor) => saveStaff(ctx, actor, id(req), req.body)));
 

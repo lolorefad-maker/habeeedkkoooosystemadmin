@@ -85,8 +85,24 @@ describe('goods: cartons in, pieces out', () => {
     expect((await h.api('GET', '/api/stock', undefined, h.tokens.waiter)).status).toBe(403);
     expect((await h.api('POST', '/api/stock/receive', { lines: [{ productId: chipsId, cartons: 1, packSize: 24 }] }, h.tokens.waiter)).status).toBe(403);
     expect((await h.api('POST', `/api/stock/${chipsId}/adjust`, { countedQty: 1, reason: null }, h.tokens.waiter)).status).toBe(403);
-    // Product prices and names stay with managers.
-    expect((await h.api('PATCH', `/api/settings/products/${chipsId}`, { price: 1 }, h.tokens.cashier)).status).toBe(403);
+    expect((await h.api('POST', '/api/settings/products', { name: 'x', category: 'x', price: 100 }, h.tokens.waiter)).status).toBe(403);
+    expect((await h.api('PATCH', `/api/settings/products/${chipsId}`, { price: 1 }, h.tokens.waiter)).status).toBe(403);
+  });
+
+  it('the cashier has exactly the owner’s rights on stock: add, edit, receive, recount, delete a product', async () => {
+    const add = await h.api('POST', '/api/settings/products', { name: 'منتج الكاشير', category: 'سناكس', price: 600, trackStock: true, stockQty: 10 }, h.tokens.cashier);
+    expect(add.status).toBe(200);
+    const edit = await h.api('PATCH', `/api/settings/products/${add.json.id}`, { name: 'منتج الكاشير', category: 'سناكس', price: 650, trackStock: true, stockQty: 10 }, h.tokens.cashier);
+    expect(edit.status).toBe(200);
+    const listed = (await h.api('GET', '/api/stock', undefined, h.tokens.cashier)).json.find((p: Json) => p.id === add.json.id);
+    expect(listed).toMatchObject({ price: 650, stockQty: 10, trackStock: true });
+    expect((await h.api('POST', '/api/stock/receive', { lines: [{ productId: add.json.id, cartons: 1, packSize: 6 }] }, h.tokens.cashier)).status).toBe(200);
+    expect((await h.api('POST', `/api/stock/${add.json.id}/adjust`, { countedQty: 15, reason: null }, h.tokens.cashier)).status).toBe(200);
+    expect((await h.api('DELETE', `/api/settings/products/${add.json.id}`, undefined, h.tokens.cashier)).status).toBe(200);
+    expect(((await h.api('GET', '/api/stock', undefined, h.tokens.cashier)).json as Json[]).some((p) => p.id === add.json.id)).toBe(false);
+    // The log says who did each step.
+    const log = (await h.api('GET', '/api/audit?limit=60', undefined, h.tokens.owner)).json as Json[];
+    expect(log.filter((e) => ['product.created', 'product.updated', 'product.deleted'].includes(e.type) && e.actorName === 'الكاشير').length).toBeGreaterThanOrEqual(3);
   });
 });
 

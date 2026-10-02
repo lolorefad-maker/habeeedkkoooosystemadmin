@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { STATUS_ICON, TypeIcon, VipBadge } from '../../components/station/status';
 import { Money, Num } from '../../components/ui/primitives';
 import { useT } from '../../i18n';
+import { serverNow } from '../../lib/clock';
 import { useFmt } from '../../lib/format';
 import type { StationView } from '../../lib/live';
 
@@ -64,11 +65,11 @@ export const StationCard = memo(function StationCard({
   const running = (bill?.total ?? 0) + (session?.itemsTotal ?? 0);
   // A session left open or paused since another day must be obvious (it is usually forgotten):
   // its caption carries the date, with a warning mark.
-  const stale = !!session && Date.now() - session.startedAt > STALE_MS;
-  const when = (ms: number) => (Date.now() - ms > STALE_MS ? f.dateTime(ms) : f.time(ms));
+  const stale = !!session && serverNow() - session.startedAt > STALE_MS;
+  const when = (ms: number) => (serverNow() - ms > STALE_MS ? f.dateTime(ms) : f.time(ms));
   // A phone booking later today: shown on the card (free or busy) so nobody gives the station away.
-  const booked = reservation && status !== 'reserved' && reservation.startAt - Date.now() < BOOKED_AHEAD_MS ? reservation : null;
-  const lateMin = status === 'reserved' && reservation ? Math.floor((Date.now() - reservation.startAt) / 60_000) : 0;
+  const booked = reservation && status !== 'reserved' && reservation.startAt - serverNow() < BOOKED_AHEAD_MS ? reservation : null;
+  const lateMin = status === 'reserved' && reservation ? Math.floor((serverNow() - reservation.startAt) / 60_000) : 0;
   const quickPause = !!onTogglePause && session?.status === 'running';
   const paused = status === 'paused';
 
@@ -179,10 +180,11 @@ export const StationCard = memo(function StationCard({
         )}
 
         {/* Footer: who, what they have, what it costs so far — or the price per hour when free */}
-        <div className="flex items-center justify-between gap-2 text-xs">
+        {/* The name takes its own line when controllers + drinks + prepayment leave it no room (a phone card). */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
           {busy ? (
             <>
-              <span className="flex min-w-0 items-center gap-1 text-on-fill/85">
+              <span className="flex min-w-[5rem] flex-1 items-center gap-1 text-on-fill/85">
                 {session.label && (
                   <>
                     <UserRound className="size-3.5 shrink-0" />
@@ -190,7 +192,7 @@ export const StationCard = memo(function StationCard({
                   </>
                 )}
               </span>
-              <span className="flex shrink-0 items-center gap-2 text-on-fill/85">
+              <span className="ms-auto flex shrink-0 items-center gap-2 text-on-fill/85">
                 {controllers.length > 0 && (
                   <span className="flex items-center gap-0.5" aria-label={controllers.map((n) => t('controllers.number', { n })).join(', ')}>
                     <Gamepad className="size-3.5" aria-hidden />

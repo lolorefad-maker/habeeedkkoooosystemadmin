@@ -20,7 +20,7 @@ The Habeedko shop's management system (red and black theme): a management system
 - **Ledger (الجرد) page:**
   - **Daily:** every device of the business day, with from–to, duration, time charge, drinks, total and how it was paid (cash / visa). Devices still open are listed live. The Z summary and "close day" follow.
   - **Monthly:** revenue for each day of the month, with cash / visa received, the best day, and month totals.
-- **Stock (المخزون) page** (its own page in the menu; the cashier receives goods and fixes counts too, adding or editing a product stays with owner/manager):
+- **Stock (المخزون) page** (its own page in the menu; the cashier has exactly the owner's rights here — receive, recount, add, edit and delete a product):
   - Every counted product with the pieces left, the ones running out on top.
   - Search, plus "running low" and "out" filters. The tiles double as filters.
   - Receive deliveries as cartons × pieces-per-carton at a price per piece, several products at once.

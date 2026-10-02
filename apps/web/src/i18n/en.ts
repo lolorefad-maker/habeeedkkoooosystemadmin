@@ -2,7 +2,7 @@ import type { Dict } from './ar';
 
 export const en: Dict = {
   app: { name: 'Habeedko', tagline: 'Gaming lounge' },
-  nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Reservations', stock: 'Stock', reports: 'Ledger', settings: 'Settings', rewards: 'Rewards' },
+  nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Bookings', stock: 'Stock', reports: 'Ledger', settings: 'Settings', rewards: 'Rewards' },
   ledger: {
     daily: 'Daily', monthly: 'Monthly', range: 'Period', from: 'From', to: 'To', rangeTotal: 'Income for the period', daysWithIncome: 'days with income',
     last7: 'Last 7 days', lastMonth: 'Last month', thisYear: 'This year', rangeInvalid: 'The start day must come before the end day',
@@ -39,7 +39,7 @@ export const en: Dict = {
   modes: { single: 'Single', multi: 'Multi', standard: 'Standard' },
   kinds: { open: 'Open time', fixed: 'Fixed time', package: 'Package' },
   roles: { owner: 'Owner', manager: 'Manager', cashier: 'Cashier', waiter: 'Waiter' },
-  conn: { online: 'Connected', offline: 'Lost connection to the server — actions paused until it is back', reconnecting: 'Reconnecting…' },
+  conn: { online: 'Connected', offline: 'Lost connection to the server — figures may be out of date until it is back', reconnecting: 'Reconnecting…' },
   floor: {
     kpiAll: 'All stations', kpiActive: 'Playing', kpiFree: 'Available', kpiEnding: 'Ending soon', kpiOver: 'Overtime', kpiUnpaid: 'Awaiting payment',
     searchPlaceholder: 'Search station or customer…', empty: 'No stations yet. Add your stations in Settings.', noMatch: 'No matches',
