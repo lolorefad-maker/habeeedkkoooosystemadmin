@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.habeedko.app",
+        "sha256_cert_fingerprints": ["B0:A5:76:F6:2B:94:25:F2:BE:43:42:CB:FB:82:E3:2C:76:60:52:CA:24:63:D0:A4:EF:D0:A4:5D:A2:12:D7:74"]
+      }
+    }]

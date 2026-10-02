@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -388,6 +388,13 @@ export async function buildApp(ctx: AppContext) {
   // ------------------------------------------------------------------ web app (one process serves everything)
   const dist = ctx.config.webDist;
   if (dist && existsSync(path.join(dist, 'index.html'))) {
+    // The Android app (a Trusted Web Activity) checks this to open full screen, without a browser bar.
+    // Static serving skips dot-folders, so it gets its own route.
+    const assetLinks = path.join(dist, '.well-known', 'assetlinks.json');
+    if (existsSync(assetLinks)) {
+      const body = readFileSync(assetLinks, 'utf8');
+      app.get('/.well-known/assetlinks.json', async (_req, reply) => reply.type('application/json').send(body));
+    }
     await app.register(fastifyStatic, { root: dist, wildcard: false });
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/') || req.url.startsWith('/ws')) {
