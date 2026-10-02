@@ -13,6 +13,9 @@ import { loadBillingContext, loadSegments, toTimeline, type Branch } from './com
  * to exactly what was billed.
  */
 
+/** Marks a payment received after its business day ended, for that day's share of a session (its drawer). */
+export const AFTER_DAY_END = 'after_day_end';
+
 export interface Carry {
   time: number;
   items: number;

@@ -27,7 +27,7 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
     .orderBy(asc(bills.createdAt));
   const pays = rows.length
     ? await q
-        .select({ billId: payments.billId, method: payments.method, amount: payments.amount })
+        .select({ billId: payments.billId, method: payments.method, amount: payments.amount, day: payments.businessDay })
         .from(payments)
         .where(inArray(payments.billId, rows.map((b) => b.id)))
     : [];
@@ -59,7 +59,8 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
       itemsTotal: b.itemsTotal,
       discount: b.discountAmount,
       total: b.total,
-      paidByMethod: byMethod(pays.filter((p) => p.billId === b.id)),
+      // This day's money only: a part an earlier day earned was paid into that day's drawer.
+      paidByMethod: byMethod(pays.filter((p) => p.billId === b.id && p.day === day)),
       /** A cafeteria sale (no device). */
       counter: !!bd.counter,
       paidAt: null as number | null,
@@ -88,7 +89,7 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
     const [billRows2, billPays] = billIds.length
       ? await Promise.all([
           q.select({ id: bills.id, total: bills.total }).from(bills).where(inArray(bills.id, billIds)),
-          q.select({ billId: payments.billId, method: payments.method, amount: payments.amount }).from(payments).where(inArray(payments.billId, billIds)),
+          q.select({ billId: payments.billId, method: payments.method, amount: payments.amount, day: payments.businessDay }).from(payments).where(inArray(payments.billId, billIds)),
         ])
       : [[], []];
     const billOf = new Map(billRows2.map((b) => [b.id, b]));
@@ -111,7 +112,8 @@ export async function sessionsLog(q: Q, branchId: string, day: string) {
         itemsTotal: c.items,
         discount: 0,
         total: c.time + c.items,
-        paidByMethod: {} as Record<string, number>,
+        // What was paid into this day's drawer for its share (when the session was paid later).
+        paidByMethod: bill ? byMethod(billPays.filter((p) => p.billId === bill.id && p.day === day)) : ({} as Record<string, number>),
         counter: false,
         carriedOutTime: 0,
         carriedOutItems: 0,

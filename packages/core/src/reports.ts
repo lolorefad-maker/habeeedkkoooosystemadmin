@@ -34,6 +34,8 @@ export interface DayReport {
     refunds: Minor;
     /** Money that actually moved today (all methods, deposits included, refunds subtracted). */
     net: Minor;
+    /** Of it: paid after the day ended, for its share of sessions still playing then. */
+    late?: Minor;
   };
   stations: { stationId: string; name: string; type: string; tier: string; minutes: number; amount: Minor }[];
   products: { productId: string; name: string; qty: number; amount: Minor }[];

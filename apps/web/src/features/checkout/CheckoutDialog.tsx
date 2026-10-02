@@ -11,6 +11,13 @@ import { ApiError, get, post } from '../../lib/api';
 import { useFmt } from '../../lib/format';
 import { useFloor, useSessionBill } from '../../lib/queries';
 import type { Bill } from '../../lib/types';
+
+/** What a checkout answers: the bill, and the part an earlier day's drawer took (it played past that day's end). */
+interface CheckoutDone {
+  billId: string;
+  number: number;
+  late?: { amount: number; cash: number; shiftId: string; userName: string; closedAt: number | null } | null;
+}
 import { TimeLines } from './BillBreakdown';
 import { printReceipt } from './receipt';
 
@@ -35,7 +42,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
   const [received, setReceived] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ billId: string; number: number } | null>(null);
+  const [done, setDone] = useState<CheckoutDone | null>(null);
 
   const settings = floor.data?.branch.settings;
   const data = sessionBill.data ?? null;
@@ -81,7 +88,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
     };
     try {
       const res = await withApproval(
-        (pin) => post<{ billId: string; number: number }>(`/api/sessions/${sessionId}/checkout`, { ...body, approvalPin: pin }),
+        (pin) => post<CheckoutDone>(`/api/sessions/${sessionId}/checkout`, { ...body, approvalPin: pin }),
         discount ? `${t('checkout.discount')} ${discount.kind === 'percent' ? `${discount.value}%` : f.money(discount.value)}` : due < 0 ? `${t('checkout.refund')} ${f.money(-due)}` : '',
       );
       setDone(res);
@@ -112,6 +119,17 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
             <p className="text-muted">
               {t('checkout.change')}: <Money value={change} currency className="font-semibold text-fg" />
             </p>
+          )}
+          {/* It played past the day's end: the old day's part goes to that day's drawer. */}
+          {done.late && done.late.amount > 0 && (
+            <div data-status="ending" className="tint w-full rounded-card border p-3.5 text-start text-sm">
+              <div className="font-semibold">
+                {done.late.cash > 0
+                  ? t('checkout.lateCash', { amount: f.money(done.late.cash), name: done.late.userName, time: done.late.closedAt ? f.time(done.late.closedAt) : '…' })
+                  : t('checkout.lateCard', { amount: f.money(done.late.amount), name: done.late.userName })}
+              </div>
+              <div className="mt-1 text-xs text-muted">{t('checkout.lateHint')}</div>
+            </div>
           )}
           <div className="mt-2 flex w-full gap-2">
             <Button block size="lg" icon={<Printer className="size-5" />} onClick={print}>

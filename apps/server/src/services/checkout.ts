@@ -7,11 +7,11 @@ import {
   type DiscountInput,
   type TimeBill,
 } from '@lounge/core';
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext, type Record_ } from '../context';
 import type { Q, Tx } from '../db';
-import { bills, branches, orderItems, orders, payments, reservations, segments, sessions, stations } from '../db/schema';
+import { bills, branches, dayCarries, orderItems, orders, payments, reservations, segments, sessions, shifts, stations, users } from '../db/schema';
 import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -28,6 +28,7 @@ import {
   toTimeline,
   type Branch,
 } from './common';
+import { AFTER_DAY_END, carriedSoFar } from './carries';
 import { returnStationControllers } from './controllers';
 import { insertOrder, orderItemsInput } from './orders';
 import { sessionItems } from './sessions';
@@ -90,6 +91,8 @@ async function finalize(
     approvalPin: string | null;
     expectedTotal: number | undefined;
     extra: Record<string, unknown>;
+    /** The part of this bill an earlier day earned (it ran past that day's end): paid into that day's drawer. */
+    late?: LateShare | null;
   },
 ) {
   const now = ctx.clock.now();
@@ -157,22 +160,31 @@ async function finalize(
     approvedBy,
   });
 
-  if (args.payments.length) {
-    await tx.insert(payments).values(
-      args.payments.map((p) => ({
-        id: newId(),
-        branchId: branch.id,
-        businessDay: day,
-        shiftId: shift!.id,
-        billId,
-        sessionId: args.sessionId,
-        method: p.method,
-        kind: p.amount < 0 ? ('refund' as const) : ('payment' as const),
-        amount: p.amount,
-        createdBy: actor.id,
-        approvedBy: p.amount < 0 ? approvedBy : null,
-      })),
-    );
+  // A session that ran past an earlier day's end: what that day earned (and was not paid yet) goes
+  // to the shift that closed then — the new shift only takes its own part.
+  let toOld = args.late && totals.due > 0 ? Math.min(args.late.amount, totals.due) : 0;
+  const lateParts: { method: 'cash' | 'card'; amount: number }[] = [];
+  const rows: (typeof payments.$inferInsert)[] = [];
+  for (const p of args.payments) {
+    const base = { branchId: branch.id, billId, sessionId: args.sessionId, method: p.method, createdBy: actor.id };
+    if (p.amount > 0 && toOld > 0 && args.late) {
+      const part = Math.min(p.amount, toOld);
+      toOld -= part;
+      lateParts.push({ method: p.method, amount: part });
+      rows.push({ ...base, id: newId(), businessDay: args.late.day, shiftId: args.late.shiftId, kind: 'payment', amount: part, note: AFTER_DAY_END, approvedBy: null });
+      if (p.amount > part) rows.push({ ...base, id: newId(), businessDay: day, shiftId: shift!.id, kind: 'payment', amount: p.amount - part, approvedBy: null });
+      continue;
+    }
+    rows.push({ ...base, id: newId(), businessDay: day, shiftId: shift!.id, kind: p.amount < 0 ? 'refund' : 'payment', amount: p.amount, approvedBy: p.amount < 0 ? approvedBy : null });
+  }
+  if (rows.length) await tx.insert(payments).values(rows);
+  const lateCash = lateParts.filter((p) => p.method === 'cash').reduce((a, p) => a + p.amount, 0);
+  if (args.late && lateCash > 0) {
+    // The old drawer was closed with what it held then; it now also holds this.
+    await tx
+      .update(shifts)
+      .set({ expectedCash: sql`coalesce(${shifts.expectedCash}, 0) + ${lateCash}` })
+      .where(eq(shifts.id, args.late.shiftId));
   }
 
   // Money taken earlier (prepaid time, reservation deposit) now belongs to this bill.
@@ -201,7 +213,57 @@ async function finalize(
     reason: args.discountReason,
   });
 
-  return { billId, number: seq!.number, totals };
+  const lateTotal = lateParts.reduce((a, p) => a + p.amount, 0);
+  return {
+    billId,
+    number: seq!.number,
+    totals,
+    late: args.late && lateTotal > 0 ? { amount: lateTotal, cash: lateCash, shiftId: args.late.shiftId, userName: args.late.userName, closedAt: args.late.closedAt } : null,
+  };
+}
+
+
+interface LateShare {
+  amount: number;
+  shiftId: string;
+  day: string;
+  userName: string;
+  closedAt: number | null;
+}
+
+/**
+ * What an earlier day earned on this session and still waits to be paid, and the drawer it goes to:
+ * the shift that closed by itself at that day's end, as long as nobody has counted it yet.
+ */
+async function lateShareFor(tx: Q, s: typeof sessions.$inferSelect, today: string): Promise<LateShare | null> {
+  const carried = (await carriedSoFar(tx, [s.id])).get(s.id);
+  const earned = carried ? carried.time + carried.items : 0;
+  if (earned <= 0) return null;
+  const [last] = await tx
+    .select({ day: dayCarries.businessDay })
+    .from(dayCarries)
+    .where(eq(dayCarries.sessionId, s.id))
+    .orderBy(desc(dayCarries.businessDay))
+    .limit(1);
+  if (!last) return null;
+  // Already paid before today (prepaid while playing, the booking's deposit): it is in the old drawers.
+  const conds = [eq(payments.sessionId, s.id)];
+  if (s.reservationId) conds.push(and(eq(payments.reservationId, s.reservationId), eq(payments.kind, 'deposit'))!);
+  const earlier = await tx
+    .select({ amount: payments.amount })
+    .from(payments)
+    .where(and(or(...conds), lt(payments.businessDay, today)));
+  const owed = earned - earlier.reduce((a, p) => a + p.amount, 0);
+  if (owed <= 0) return null;
+  const [drawer] = await tx
+    .select({ id: shifts.id, closedAt: shifts.closedAt, userName: users.name })
+    .from(shifts)
+    .leftJoin(users, eq(users.id, shifts.userId))
+    .where(and(eq(shifts.branchId, s.branchId), eq(shifts.businessDay, last.day), eq(shifts.status, 'closed'), isNull(shifts.closedBy), isNull(shifts.countedCash)))
+    .orderBy(desc(shifts.closedAt))
+    .limit(1);
+  if (!drawer) return null;
+  return { amount: owed, shiftId: drawer.id, day: last.day, userName: drawer.userName ?? '', closedAt: drawer.closedAt?.getTime() ?? null };
 }
 
 export async function checkoutSession(ctx: AppContext, actor: Actor, sessionId: string, raw: unknown) {
@@ -233,8 +295,10 @@ export async function checkoutSession(ctx: AppContext, actor: Actor, sessionId: 
     const orderIds = [...new Set(items.map((i) => i.orderId))];
     const [st] = await tx.select({ name: stations.name }).from(stations).where(eq(stations.id, s.stationId));
     const paid = await sessionPaidByMethod(tx, s);
+    const late = await lateShareFor(tx, s, await currentDay(tx, branch, now));
 
     const result = await finalize(tx, record, ctx, actor, branch, {
+      late,
       sessionId: s.id,
       reservationId: s.reservationId,
       time,

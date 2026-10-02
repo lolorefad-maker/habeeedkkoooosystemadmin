@@ -72,9 +72,15 @@ describe('a session across midnight', () => {
     expect(d2.revenue.total).toBe(12750 - 6750); // the 3 hours after midnight
     expect(d2.revenue.time).toBe(6000);
     expect(d2.revenue.items).toBe(0);
-    expect(d2.payments.byMethod.cash).toBe(12750); // the money is today's: it is in today's drawer
+    // The money follows the same split: today's drawer takes its part, the 6th's drawer the rest.
+    expect(d2.payments.byMethod.cash).toBe(6000);
+    const d1After = await report('2026-10-06');
+    expect(d1After.payments.byMethod.cash).toBe(6750);
+    expect(d1After.payments.late).toBe(6750);
+    expect(paid.json.late).toMatchObject({ amount: 6750, cash: 6750 });
     const row = (await log('2026-10-07')).find((r) => !r.carried && r.total === 12750);
     expect(row.carriedOutTime + row.carriedOutItems).toBe(6750);
+    expect(row.paidByMethod).toEqual({ cash: 6000 });
 
     // The day before shows the 9 pm → midnight part, and that it was paid at 3 am.
     const before = (await log('2026-10-06')).find((r) => r.carried && r.total === 6750);
@@ -84,32 +90,37 @@ describe('a session across midnight', () => {
     expect(before.paidAt).toBe(Date.parse('2026-10-07T03:00:00+03:00'));
     expect(before.billTotal).toBe(12750);
     expect(before.billPaidByMethod).toEqual({ cash: 12750 });
+    expect(before.paidByMethod).toEqual({ cash: 6750 });
 
     const month = (await h.api('GET', '/api/reports/month?month=2026-10', undefined, h.tokens.manager)).json;
     const m6 = month.days.find((d: Json) => d.day === '2026-10-06');
     const m7 = month.days.find((d: Json) => d.day === '2026-10-07');
     expect(m6.total).toBe(8750);
     expect(m7.total).toBe(6000);
+    expect(m6.received.cash).toBe(6750);
+    expect(m7.received.cash).toBe(6000);
   });
 
   it('the shift rolled over at midnight: the old one closed uncounted, the new one started from zero', async () => {
     const d1 = await report('2026-10-06');
     expect(d1.shifts).toHaveLength(1);
-    expect(d1.shifts[0]).toMatchObject({ auto: true, countedCash: null, expectedCash: 20000 });
+    expect(d1.shifts[0]).toMatchObject({ auto: true, countedCash: null });
     const cur = (await h.api('GET', '/api/shifts/current', undefined, h.tokens.cashier)).json.shift;
     expect(cur.businessDay).toBe('2026-10-07');
     expect(cur.openingFloat).toBe(0);
-    expect(cur.expectedCash).toBe(12750); // only what it took: the 3 am payment
+    expect(cur.expectedCash).toBe(6000); // only its own part of the 3 am payment
 
     // The old drawer is counted afterwards (once), and the closed day shows it.
     expect((await h.api('POST', `/api/shifts/${cur.id}/count`, { countedCash: 1 }, h.tokens.cashier)).json.code).toBe('shift_not_closed');
-    const counted = await h.api('POST', `/api/shifts/${d1.shifts[0].id}/count`, { countedCash: 19500, note: 'ناقص نص دينار' }, h.tokens.cashier);
-    expect(counted.json).toMatchObject({ expectedCash: 20000, countedCash: 19500, variance: -500 });
+    // The old drawer: its 20.000, plus the 6.750 the 9 pm → midnight part brought at 3 am.
+    expect(d1.shifts[0].expectedCash).toBe(26750);
+    const counted = await h.api('POST', `/api/shifts/${d1.shifts[0].id}/count`, { countedCash: 26250, note: 'ناقص نص دينار' }, h.tokens.cashier);
+    expect(counted.json).toMatchObject({ expectedCash: 26750, countedCash: 26250, variance: -500 });
     expect((await h.api('POST', `/api/shifts/${d1.shifts[0].id}/count`, { countedCash: 20000 }, h.tokens.cashier)).json.code).toBe('shift_already_counted');
-    expect((await report('2026-10-06')).shifts[0]).toMatchObject({ auto: true, countedCash: 19500, variance: -500 });
+    expect((await report('2026-10-06')).shifts[0]).toMatchObject({ auto: true, countedCash: 26250, variance: -500 });
 
     // The cashier closes the new shift by hand as usual.
-    const closed = await h.api('POST', '/api/shifts/close', { countedCash: 12750 }, h.tokens.cashier);
+    const closed = await h.api('POST', '/api/shifts/close', { countedCash: 6000 }, h.tokens.cashier);
     expect(closed.json.variance).toBe(0);
     expect((await h.api('POST', '/api/shifts/open', { openingFloat: 0 }, h.tokens.cashier)).status).toBe(200);
   });
@@ -181,21 +192,51 @@ describe('ledger: any period, from day to day', () => {
   });
 });
 
+describe('late share: never into a drawer already counted, never twice', () => {
+  it('prepaid before midnight counts toward the old shift; a counted old drawer is left alone', async () => {
+    await h.api('POST', '/api/shifts/open', { openingFloat: 0 }, h.tokens.cashier);
+    at('2026-10-07T21:00:00');
+    const a = (await h.api('POST', '/api/sessions', { stationId: (await station('PS-06')).id, mode: 'single', kind: 'open' }, h.tokens.cashier)).json.id;
+    const b = (await h.api('POST', '/api/sessions', { stationId: (await station('PS-07')).id, mode: 'single', kind: 'open' }, h.tokens.cashier)).json.id;
+    // A paid 2.000 up front, before midnight: already in the 7th's drawer.
+    expect((await h.api('POST', `/api/sessions/${a}/payments`, { method: 'cash', amount: 2000 }, h.tokens.cashier)).status).toBe(200);
+    at('2026-10-08T00:00:30');
+    expect(await autoRollover(h.ctx, h.branchId)).toBe(true);
+    const old = (await h.floor()).uncountedShifts[0];
+    expect(old.expectedCash).toBe(2000);
+    at('2026-10-08T01:00:00');
+    const billA = (await h.api('GET', `/api/sessions/${a}/bill`, undefined, h.tokens.cashier)).json;
+    const payA = await h.api('POST', `/api/sessions/${a}/checkout`, { payments: [{ method: 'cash', amount: billA.totals.due }], expectedTotal: billA.totals.total }, h.tokens.cashier);
+    // 3 h = 6.000 earned on the 7th, 2.000 of it already there: 4.000 more for the old drawer.
+    expect(payA.json.late).toMatchObject({ amount: 4000, cash: 4000 });
+    expect((await h.floor()).uncountedShifts[0].expectedCash).toBe(6000);
+    // Once the old drawer is counted, a later payment stays in the new shift.
+    expect((await h.api('POST', `/api/shifts/${old.id}/count`, { countedCash: 6000 }, h.tokens.cashier)).json.variance).toBe(0);
+    const billB = (await h.api('GET', `/api/sessions/${b}/bill`, undefined, h.tokens.cashier)).json;
+    const payB = await h.api('POST', `/api/sessions/${b}/checkout`, { payments: [{ method: 'cash', amount: billB.totals.due }], expectedTotal: billB.totals.total }, h.tokens.cashier);
+    expect(payB.json.late).toBeNull();
+    const cur = (await h.api('GET', '/api/shifts/current', undefined, h.tokens.cashier)).json.shift;
+    expect(cur.expectedCash).toBe(billA.totals.due - 4000 + billB.totals.due);
+    await h.api('POST', '/api/shifts/close', { countedCash: cur.expectedCash }, h.tokens.cashier);
+  });
+});
+
 describe('a station stopped before midnight, paid after', () => {
   it('the old day shows it until it stopped, and when it was paid', async () => {
     await h.api('POST', '/api/shifts/open', { openingFloat: 0 }, h.tokens.cashier);
-    at('2026-10-07T22:00:00');
+    at('2026-10-08T22:00:00');
     const s = (await h.api('POST', '/api/sessions', { stationId: (await station('PS-05')).id, mode: 'single', kind: 'open' }, h.tokens.cashier)).json.id;
-    at('2026-10-07T23:30:00');
+    at('2026-10-08T23:30:00');
     expect((await h.api('POST', `/api/sessions/${s}/action`, { type: 'end' }, h.tokens.cashier)).status).toBe(200);
-    at('2026-10-08T00:05:00');
+    at('2026-10-09T00:05:00');
     expect(await autoRollover(h.ctx, h.branchId)).toBe(true);
-    at('2026-10-08T01:00:00');
+    at('2026-10-09T01:00:00');
     const bill = (await h.api('GET', `/api/sessions/${s}/bill`, undefined, h.tokens.cashier)).json;
     expect((await h.api('POST', `/api/sessions/${s}/checkout`, { payments: [{ method: 'card', amount: bill.totals.due }], expectedTotal: bill.totals.total }, h.tokens.cashier)).status).toBe(200);
-    const row = (await log('2026-10-07')).find((r) => r.carried && r.stationName === 'PS-05');
-    expect(row.endedAt).toBe(Date.parse('2026-10-07T23:30:00+03:00'));
-    expect(row.paidAt).toBe(Date.parse('2026-10-08T01:00:00+03:00'));
+    const row = (await log('2026-10-08')).find((r) => r.carried && r.stationName === 'PS-05');
+    expect(row.endedAt).toBe(Date.parse('2026-10-08T23:30:00+03:00'));
+    expect(row.paidAt).toBe(Date.parse('2026-10-09T01:00:00+03:00'));
     expect(row.billPaidByMethod).toEqual({ card: bill.totals.due });
+    expect(row.paidByMethod).toEqual({ card: 3000 }); // 22:00 → 23:30 went to the 8th's drawer
   });
 });

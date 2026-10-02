@@ -252,7 +252,6 @@ function SplitNote({ r }: { r: Row }) {
           (r.paidAt ? (
             <span className="flex flex-wrap items-center gap-1 text-st-free">
               {t('ledger.carriedPaid', { time: f.time(r.paidAt) })} <Money value={r.billTotal ?? 0} />
-              {r.billPaidByMethod && <PaidChips paid={r.billPaidByMethod} />}
             </span>
           ) : (
             <span className="text-st-ending">{t('ledger.carriedUnpaid')}</span>

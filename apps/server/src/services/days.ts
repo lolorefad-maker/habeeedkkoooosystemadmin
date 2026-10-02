@@ -30,7 +30,7 @@ import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { currentDay, getBranch, loadBillingContext, loadSegments, openShift, toTimeline, type Branch } from './common';
-import { carriedSoFar, carriesOnDays, carryOpenSessions } from './carries';
+import { AFTER_DAY_END, carriedSoFar, carriesOnDays, carryOpenSessions } from './carries';
 import { closeOpenShift, closeShiftInput, rollShiftAtDayEnd } from './shifts';
 
 export const closeDayInput = z.object({
@@ -90,15 +90,7 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
   }
 
   // Money movements
-  const byMethod: Record<string, number> = { cash: 0, card: 0, wallet: 0 };
-  let deposits = 0;
-  let refunds = 0;
-  for (const p of dayPayments) {
-    byMethod[p.method] = (byMethod[p.method] ?? 0) + p.amount;
-    if (p.kind === 'deposit') deposits += p.amount;
-    if (p.amount < 0) refunds += -p.amount;
-  }
-  const net = Object.values(byMethod).reduce((a, b) => a + b, 0);
+  const money = paymentsSummary(dayPayments);
 
   // Station performance from bill snapshots
   const stationMap = new Map(allStations.map((s) => [s.id, s]));
@@ -223,7 +215,7 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
     auto: row.auto,
     currency: { code: branch.currency, decimals: branch.currencyDecimals },
     revenue,
-    payments: { byMethod, deposits, refunds, net },
+    payments: money,
     stations: stationRows,
     products: [...perProduct.entries()]
       .map(([productId, v]) => ({ productId, ...v }))
@@ -244,6 +236,25 @@ export async function buildDayReport(q: Q, branch: Branch, day: string, now: num
       return { productId: c.productId, name: p?.name ?? '?', expected: counted - c.delta, counted, variance: c.delta };
     }),
   };
+}
+
+/**
+ * The day's money: what moved per method, deposits, refunds, and what was paid after the day ended
+ * for its share of sessions still playing then (it went into that day's drawer).
+ */
+function paymentsSummary(rows: { method: string; kind: string; amount: number; note: string | null }[]): DayReport['payments'] {
+  const byMethod: Record<string, number> = { cash: 0, card: 0, wallet: 0 };
+  let deposits = 0;
+  let refunds = 0;
+  let late = 0;
+  for (const p of rows) {
+    byMethod[p.method] = (byMethod[p.method] ?? 0) + p.amount;
+    if (p.kind === 'deposit') deposits += p.amount;
+    if (p.amount < 0) refunds += -p.amount;
+    if (p.note === AFTER_DAY_END) late += p.amount;
+  }
+  const net = Object.values(byMethod).reduce((a, b) => a + b, 0);
+  return { byMethod, deposits, refunds, net, late };
 }
 
 /** The day's cash-drawer shifts as the report shows them (live: a drawer counted later shows its count). */
@@ -366,10 +377,14 @@ export async function dayReport(q: Q, branchId: string, day: string | null, now:
   const row = await getDayRow(q, branchId, target);
   if (!row) throw notFound('business day');
   if (row.status === 'closed' && row.report) {
-    // The saved report is the day as it closed; only its drawers stay live (a drawer counted later).
+    // The saved report is the day as it closed; its drawers and money stay live: a drawer counted
+    // later, and the late payment of a session that was playing when it ended.
     const saved = row.report as unknown as DayReport;
-    const dayShifts = await q.select().from(shifts).where(and(eq(shifts.branchId, branchId), eq(shifts.businessDay, target)));
-    return { ...saved, shifts: await shiftsOfDay(q, dayShifts) };
+    const [dayShifts, dayPayments] = await Promise.all([
+      q.select().from(shifts).where(and(eq(shifts.branchId, branchId), eq(shifts.businessDay, target))),
+      q.select().from(payments).where(and(eq(payments.branchId, branchId), eq(payments.businessDay, target))),
+    ]);
+    return { ...saved, payments: paymentsSummary(dayPayments), shifts: await shiftsOfDay(q, dayShifts) };
   }
   return buildDayReport(q, branch, target, now);
 }

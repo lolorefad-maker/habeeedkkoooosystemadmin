@@ -225,10 +225,11 @@ function DaySummary({ r }: { r: DayReport }) {
           )}
         </div>
         {/* A station that was playing when a day ended is split across the two days. */}
-        {(carriedIn !== 0 || carriedOut !== 0 || (r.status === 'open' && r.openSessions.runningValue > 0)) && (
+        {(carriedIn !== 0 || carriedOut !== 0 || (r.payments.late ?? 0) > 0 || (r.status === 'open' && r.openSessions.runningValue > 0)) && (
           <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted">
             {carriedIn !== 0 && <li>{t('reports.carriedIn', { amount: f.money(carriedIn) })}</li>}
             {carriedOut !== 0 && <li>{t('reports.carriedOut', { amount: f.money(carriedOut) })}</li>}
+            {(r.payments.late ?? 0) > 0 && <li>{t('reports.latePayments', { amount: f.money(r.payments.late ?? 0) })}</li>}
             {r.status === 'open' && r.openSessions.runningValue > 0 && (
               <li className="text-st-reserved">{t('reports.runningNow', { amount: f.money(r.openSessions.runningValue) })}</li>
             )}
