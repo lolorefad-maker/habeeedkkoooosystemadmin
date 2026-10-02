@@ -285,7 +285,7 @@ export function FloorPage() {
               </span>
             )}
           </Link>
-          {can.reports(role) && <StockButton />}
+          {can.stock(role) && <StockButton />}
           {can.settings(role) && floor.data && <QuickDiscountButton floor={floor.data} ctx={ctx} now={now} />}
         </div>
       </div>

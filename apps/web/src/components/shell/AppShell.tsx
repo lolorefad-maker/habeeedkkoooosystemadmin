@@ -48,7 +48,7 @@ const NAV: NavItem[] = [
   { to: '/cafe', label: 'nav.cafe', icon: Coffee, allow: can.checkout, mobile: true },
   { to: '/controllers', label: 'nav.controllers', icon: Gamepad, mobile: true },
   { to: '/reservations', label: 'nav.reservations', icon: CalendarDays, allow: can.reservations, mobile: true },
-  { to: '/stock', label: 'nav.stock', icon: Boxes, allow: can.reports, mobile: true },
+  { to: '/stock', label: 'nav.stock', icon: Boxes, allow: can.stock, mobile: true },
   { to: '/reports', label: 'nav.reports', icon: BarChart3, allow: can.reports, mobile: true },
   { to: '/settings', label: 'nav.settings', icon: Settings, allow: can.settings, mobile: true },
 ];

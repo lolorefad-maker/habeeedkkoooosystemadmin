@@ -6,7 +6,7 @@ The Habeedko shop's management system (red and black theme): a management system
 - **Cafeteria (كافيتيريا):** the cashier sells drinks and snacks to someone not on a device, paid on the spot in cash or visa. The stock goes down and the sale shows in the ledger as "Cafeteria".
 - **A day that ends at midnight:** set the day start to 00:00. At midnight the day and the shift close by themselves; the new shift starts from zero. The old shift's drawer is counted afterwards ("Count the drawer" on the shift button or in the ledger). A station playing 9 pm → 3 am is split: the 3 hours before midnight are the old day's income, the rest the new day's. The money follows the same split: when the customer pays at 3 am, the new shift takes only its part and the old shift's drawer gets the 9 pm → midnight part (the screen tells the cashier to put it with that shift's cash, if that drawer is not counted yet). The old day's log shows "9:00 – 12:00, paid at 3:00".
 - **Numbered controllers:** each controller has a number. You see which ones are with which device, and which are on the shelf. When a battery dies you tap "battery died" and swap in a ready one; after the charge time (1 hour by default) it becomes ready again by itself and every screen gets a notice. Controllers follow a session when it moves to another station, and return to the shelf when it ends (configurable).
-- **Floor:** every station (PS5 / VR, Regular / VIP) live, with timers, running cost, controller numbers, reservations and status.
+- **Floor:** every station (PS5 / VR; Regular / VIP / Big screen, each with its own prices) live, with timers, running cost, controller numbers, reservations and status.
 - **Time alerts (sound):**
   - A soft chime and a notice when a fixed session is about to end (the "ending soon" setting, 5 minutes by default).
   - An alarm when time is up, with a notice that stays until someone taps OK, or Open (which jumps to the station). The alarm repeats every 2 minutes while nobody reacts.
@@ -19,7 +19,7 @@ The Habeedko shop's management system (red and black theme): a management system
 - **Ledger (الجرد) page:**
   - **Daily:** every device of the business day, with from–to, duration, time charge, drinks, total and how it was paid (cash / visa). Devices still open are listed live. The Z summary and "close day" follow.
   - **Monthly:** revenue for each day of the month, with cash / visa received, the best day, and month totals.
-- **Stock (المخزون) page** (its own page in the menu, owner/manager):
+- **Stock (المخزون) page** (its own page in the menu; the cashier receives goods and fixes counts too, adding or editing a product stays with owner/manager):
   - Every counted product with the pieces left, the ones running out on top.
   - Search, plus "running low" and "out" filters. The tiles double as filters.
   - Receive deliveries as cartons × pieces-per-carton at a price per piece, several products at once.
@@ -33,7 +33,7 @@ The Habeedko shop's management system (red and black theme): a management system
 - **How many are left (chips, chocolate, drinks…):**
   - Every drink/food button on a device shows "N left".
   - After drinks go on a device, the notice says what is left of each item. It becomes a warning when an item is running low or ran out, and the other devices get that warning too.
-  - The owner's **Stock** button on the floor lists every counted item with the pieces left, the ones running out on top.
+  - The **Stock** button on the floor (owner, manager, cashier) lists every counted item with the pieces left, the ones running out on top.
   - A product created on a delivery warns at about a quarter of a carton; change it in Settings → Products.
 - **Payments are recorded, not processed:** cash or visa is a label on each payment. The system does not charge cards.
 - **Money control:** a cash-drawer shift must be open before any payment. Every discount or refund above the limit, and every void, needs a manager PIN. Nothing that touches money is ever deleted, and every action is in the audit log.

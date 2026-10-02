@@ -67,6 +67,8 @@ export const PERMISSIONS = {
   checkout: DESK,
   'reservation.manage': DESK,
   'shift.manage': DESK,
+  'stock.view': DESK,
+  'stock.manage': DESK,
   'reports.view': MGMT,
   'day.close': MGMT,
   'settings.manage': MGMT,

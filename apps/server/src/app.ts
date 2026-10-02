@@ -312,12 +312,12 @@ export async function buildApp(ctx: AppContext) {
   );
 
   // ------------------------------------------------------------------ goods (stock)
-  app.get('/api/stock', route('reports.view', async (_req, actor) => listStock(ctx.db, actor.branchId)));
-  app.post('/api/stock/receive', route('settings.manage', async (req, actor) => receiveStock(ctx, actor, req.body)));
-  app.post('/api/stock/:id/adjust', route('settings.manage', async (req, actor) => adjustStock(ctx, actor, id(req), req.body)));
+  app.get('/api/stock', route('stock.view', async (_req, actor) => listStock(ctx.db, actor.branchId)));
+  app.post('/api/stock/receive', route('stock.manage', async (req, actor) => receiveStock(ctx, actor, req.body)));
+  app.post('/api/stock/:id/adjust', route('stock.manage', async (req, actor) => adjustStock(ctx, actor, id(req), req.body)));
   app.get(
     '/api/stock/movements',
-    route('reports.view', async (req, actor) => {
+    route('stock.view', async (req, actor) => {
       const q = z
         .object({ productId: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(500).default(100) })
         .parse(req.query);

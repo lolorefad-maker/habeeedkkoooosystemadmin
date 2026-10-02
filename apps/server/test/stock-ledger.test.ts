@@ -73,9 +73,20 @@ describe('goods: cartons in, pieces out', () => {
     expect(moves[2]).toMatchObject({ delta: 12, cartons: 1, packSize: 12, unitPrice: 750 });
   });
 
-  it('only managers receive goods', async () => {
+  it('the cashier sees the stock, receives goods and fixes a count; the waiter does none of it', async () => {
+    expect((await h.api('GET', '/api/stock', undefined, h.tokens.cashier)).status).toBe(200);
+    expect((await h.api('GET', `/api/stock/movements?productId=${cakeId}`, undefined, h.tokens.cashier)).status).toBe(200);
     const r = await h.api('POST', '/api/stock/receive', { lines: [{ productId: chipsId, cartons: 1, packSize: 24 }] }, h.tokens.cashier);
-    expect(r.status).toBe(403);
+    expect(r.status).toBe(200);
+    const fix = await h.api('POST', `/api/stock/${chipsId}/adjust`, { countedQty: r.json.received[0].stockQty - 1, reason: 'وحدة تلفت' }, h.tokens.cashier);
+    expect(fix.status).toBe(200);
+    expect(fix.json.delta).toBe(-1);
+
+    expect((await h.api('GET', '/api/stock', undefined, h.tokens.waiter)).status).toBe(403);
+    expect((await h.api('POST', '/api/stock/receive', { lines: [{ productId: chipsId, cartons: 1, packSize: 24 }] }, h.tokens.waiter)).status).toBe(403);
+    expect((await h.api('POST', `/api/stock/${chipsId}/adjust`, { countedQty: 1, reason: null }, h.tokens.waiter)).status).toBe(403);
+    // Product prices and names stay with managers.
+    expect((await h.api('PATCH', `/api/settings/products/${chipsId}`, { price: 1 }, h.tokens.cashier)).status).toBe(403);
   });
 });
 

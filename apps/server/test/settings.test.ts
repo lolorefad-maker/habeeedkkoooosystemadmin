@@ -48,6 +48,27 @@ describe('settings: every tab saves what it shows', () => {
     expect(same.status).toBe(200);
   });
 
+  it('big screen: its own tier, one price for single and multi, no regular package', async () => {
+    const add = await h.api('POST', '/api/settings/stations', { name: 'الشاشة الكبيرة', type: 'ps5', tier: 'big', zone: 'الصالة', modes: ['single', 'multi'], sort: 100 }, h.tokens.owner);
+    expect(add.status).toBe(200);
+    const rule = await h.api(
+      'POST',
+      '/api/settings/rules',
+      { name: 'الشاشة الكبيرة', priority: 0, active: true, effect: { kind: 'rate', perHour: 2500 }, match: { stationIds: null, stationTypes: null, tiers: ['big'], modes: null } },
+      h.tokens.owner,
+    );
+    expect(rule.status).toBe(200);
+    for (const mode of ['single', 'multi']) {
+      const s = await h.api('POST', '/api/sessions', { stationId: add.json.id, mode, kind: 'open' }, h.tokens.cashier);
+      expect(s.status).toBe(200);
+      h.advance(180);
+      const bill = (await h.api('GET', `/api/sessions/${s.json.id}/bill`, undefined, h.tokens.cashier)).json;
+      expect(bill.time.lines.map((l: Json) => l.perHour)).toEqual([2500]);
+      expect(bill.time.total).toBe(7500); // 3 h × 2.500 — the regular "3 hours" package does not apply
+      await h.api('POST', `/api/sessions/${s.json.id}/void`, { reason: 'test' }, h.tokens.owner);
+    }
+  });
+
   it('pricing: a new hourly rule and a package', async () => {
     const rule = await h.api(
       'POST',

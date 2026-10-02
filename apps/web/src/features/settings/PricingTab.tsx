@@ -40,7 +40,7 @@ export function PricingTab({ data }: { data: SettingsBundle }) {
 
   const types = [...new Set(data.stations.map((s) => s.type))];
   const typeOpts = types.map((x) => ({ value: x, label: tk('types', x) }));
-  const tierOpts = ['regular', 'vip'].map((x) => ({ value: x, label: tk('tiers', x) }));
+  const tierOpts = ['regular', 'vip', 'big'].map((x) => ({ value: x, label: tk('tiers', x) }));
   const modeOpts = [...new Set(data.stations.flatMap((s) => s.modes))].map((x) => ({ value: x, label: tk('modes', x) }));
   const dayOrder = lang === 'ar' ? [6, 7, 1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6, 7];
   const dayOpts = dayOrder.map((d) => ({ value: String(d), label: t(`weekdays.${d}`) }));

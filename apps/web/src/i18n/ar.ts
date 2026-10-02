@@ -153,7 +153,7 @@ export const ar = {
     ended: 'منتهٍ',
   },
   types: { ps5: 'PS5', vr: 'VR', pc: 'PC' },
-  tiers: { regular: 'عادي', vip: 'VIP' },
+  tiers: { regular: 'عادي', vip: 'VIP', big: 'شاشة كبيرة' },
   modes: { single: 'فردي', multi: 'زوجي', standard: 'عادي' },
   kinds: { open: 'وقت مفتوح', fixed: 'وقت محدد', package: 'باكج' },
   roles: { owner: 'مالك', manager: 'مدير', cashier: 'كاشير', waiter: 'ويتر' },

@@ -36,6 +36,8 @@ export function StockPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
+  // The cashier receives deliveries and fixes counts; adding or editing a product (its price) stays with managers.
+  const goods = can.stock(role);
   const manage = can.settings(role);
 
   // "/stock?receive=1" (from the floor's Stock panel) opens "Receive goods" straight away.
@@ -80,11 +82,13 @@ export function StockPage() {
           <h1 className="text-xl font-bold">{t('nav.stock')}</h1>
           <p className="text-sm text-muted">{t('stock.pageHint')}</p>
         </div>
-        {manage && (
+        {goods && (
           <>
-            <Button icon={<Plus className="size-4" />} onClick={() => setEditing({ product: null })}>
-              {t('settings.product.add')}
-            </Button>
+            {manage && (
+              <Button icon={<Plus className="size-4" />} onClick={() => setEditing({ product: null })}>
+                {t('settings.product.add')}
+              </Button>
+            )}
             <Button variant="primary" size="lg" icon={<PackagePlus className="size-5" />} onClick={() => setReceiving(null)}>
               {t('goods.receive')}
             </Button>
@@ -129,7 +133,7 @@ export function StockPage() {
         <EmptyState
           icon={<PackageOpen />}
           title={t('goods.empty')}
-          action={manage && <Button variant="primary" onClick={() => setReceiving(null)}>{t('goods.receive')}</Button>}
+          action={goods && <Button variant="primary" onClick={() => setReceiving(null)}>{t('goods.receive')}</Button>}
         />
       ) : shown.length === 0 ? (
         <EmptyState icon={<Search />} title={t('floor.noMatch')} action={<Button onClick={() => (setQ(''), setFilter('all'))}>{t('common.all')}</Button>} />
@@ -161,7 +165,7 @@ export function StockPage() {
                       {p.level === 'out' ? t('goods.out') : p.level === 'low' ? t('goods.low') : t('goods.pieces')}
                     </span>
                   </div>
-                  {manage && (
+                  {goods && (
                     <div className="flex shrink-0 justify-end gap-1 max-sm:basis-full max-sm:border-t max-sm:border-line/60 max-sm:pt-1">
                       <Button size="icon" variant="ghost" onClick={() => setReceiving(p.id)} aria-label={t('goods.receive')} title={t('goods.receive')}>
                         <Plus className="size-5" />
@@ -169,9 +173,11 @@ export function StockPage() {
                       <Button size="icon" variant="ghost" onClick={() => setAdjusting(p)} aria-label={t('goods.adjust')} title={t('goods.adjust')}>
                         <Pencil className="size-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setEditing({ product: p })} aria-label={t('stock.editProduct')} title={t('stock.editProduct')}>
-                        <Settings2 className="size-4" />
-                      </Button>
+                      {manage && (
+                        <Button size="icon" variant="ghost" onClick={() => setEditing({ product: p })} aria-label={t('stock.editProduct')} title={t('stock.editProduct')}>
+                          <Settings2 className="size-4" />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

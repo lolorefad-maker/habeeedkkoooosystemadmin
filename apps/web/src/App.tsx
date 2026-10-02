@@ -93,7 +93,7 @@ export function App() {
               <Route
                 path="/stock"
                 element={
-                  <RequireAuth allow={can.reports}>
+                  <RequireAuth allow={can.stock}>
                     <StockPage />
                   </RequireAuth>
                 }

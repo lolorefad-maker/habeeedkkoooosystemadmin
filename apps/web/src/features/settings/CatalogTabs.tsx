@@ -207,6 +207,7 @@ export function StationsTab({ data }: { data: SettingsBundle }) {
               <Select id="s-tier" value={editing.form.tier} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, tier: e.target.value } })}>
                 <option value="regular">{tk('tiers', 'regular')}</option>
                 <option value="vip">VIP</option>
+                <option value="big">{tk('tiers', 'big')}</option>
               </Select>
             </Field>
             <Field label={t('settings.station.modes')} className="sm:col-span-2">

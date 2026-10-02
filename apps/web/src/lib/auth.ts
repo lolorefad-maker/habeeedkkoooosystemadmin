@@ -58,6 +58,7 @@ export const can = {
   checkout: (r?: Role) => !!r && DESK.includes(r),
   reservations: (r?: Role) => !!r && DESK.includes(r),
   shift: (r?: Role) => !!r && DESK.includes(r),
+  stock: (r?: Role) => !!r && DESK.includes(r),
   reports: (r?: Role) => !!r && MGMT.includes(r),
   settings: (r?: Role) => !!r && MGMT.includes(r),
   isManager: (r?: Role) => !!r && MGMT.includes(r),

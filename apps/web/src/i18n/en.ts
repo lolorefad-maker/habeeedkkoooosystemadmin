@@ -35,7 +35,7 @@ export const en: Dict = {
     off: 'Maintenance', unpaid: 'Awaiting payment', ended: 'Ended',
   },
   types: { ps5: 'PS5', vr: 'VR', pc: 'PC' },
-  tiers: { regular: 'Regular', vip: 'VIP' },
+  tiers: { regular: 'Regular', vip: 'VIP', big: 'Big screen' },
   modes: { single: 'Single', multi: 'Multi', standard: 'Standard' },
   kinds: { open: 'Open time', fixed: 'Fixed time', package: 'Package' },
   roles: { owner: 'Owner', manager: 'Manager', cashier: 'Cashier', waiter: 'Waiter' },
