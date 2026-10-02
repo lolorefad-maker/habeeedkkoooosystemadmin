@@ -1,4 +1,4 @@
-import { parseMoney, type BranchSettings } from '@lounge/core';
+import { DEFAULT_REWARD_MESSAGE, parseMoney, type BranchSettings } from '@lounge/core';
 import { clsx } from 'clsx';
 import { Building2, Coffee, Download, History, Monitor, Scale, Tags, Upload, Users } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { useAction } from '../../components/ui/feedback';
-import { Card, Field, Input, Segmented, Select, Skeleton, Switch } from '../../components/ui/primitives';
+import { Card, Field, Input, Segmented, Select, Skeleton, Switch, Textarea } from '../../components/ui/primitives';
 import { useT, type TKey } from '../../i18n';
 import { api, get, post } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -416,6 +416,51 @@ function PoliciesTab({ data }: { data: SettingsBundle }) {
         <div className="mt-4 border-t border-line pt-4">
           <Switch checked={s.day.autoCloseDay} onChange={(v) => set('day', { autoCloseDay: v })} label={t('settings.policy.autoCloseDay')} />
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <h3 className="mb-4 font-semibold">{t('settings.policy.rewards')}</h3>
+        <Switch checked={s.rewards.enabled} onChange={(v) => set('rewards', { enabled: v })} label={t('settings.policy.rewardsEnabled')} hint={t('settings.policy.rewardsEnabledHint')} />
+        {s.rewards.enabled && (
+          <>
+            <div className="mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+              <Field label={t('settings.policy.rewardsAfter')} hint={t('settings.policy.rewardsAfterHint')} htmlFor="rw-after">
+                <NumInput id="rw-after" min={30} max={1440} value={s.rewards.afterMinutes} onChange={(v) => set('rewards', { afterMinutes: n(v) })} />
+              </Field>
+              <Field label={t('settings.policy.rewardsFree')} htmlFor="rw-free">
+                <NumInput id="rw-free" min={5} max={1440} value={s.rewards.freeMinutes} onChange={(v) => set('rewards', { freeMinutes: n(v) })} />
+              </Field>
+              <Field label={t('settings.policy.rewardsCode')} hint={t('settings.policy.rewardsCodeHint')} htmlFor="rw-cc">
+                <Input
+                  id="rw-cc"
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="num text-start"
+                  value={s.rewards.countryCode}
+                  maxLength={4}
+                  onChange={(e) => set('rewards', { countryCode: e.target.value.replace(/\D/g, '') })}
+                />
+              </Field>
+            </div>
+            <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+              <Field label={t('settings.policy.rewardsMessage')} htmlFor="rw-msg" hint={t('settings.policy.rewardsMessageHint')}>
+                <Textarea id="rw-msg" value={s.rewards.message} maxLength={600} onChange={(e) => set('rewards', { message: e.target.value })} />
+              </Field>
+              <div className="flex flex-wrap items-center gap-2" dir="ltr">
+                {['{name}', '{played}', '{free}', '{shop}'].map((v) => (
+                  <code key={v} className="rounded-control bg-surface-3 px-2 py-1 text-xs text-muted">
+                    {v}
+                  </code>
+                ))}
+                {s.rewards.message !== DEFAULT_REWARD_MESSAGE && (
+                  <Button size="sm" variant="ghost" className="ms-auto" onClick={() => set('rewards', { message: DEFAULT_REWARD_MESSAGE })}>
+                    {t('settings.policy.rewardsReset')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </Card>
 
       <div className="sticky bottom-4 flex justify-end">

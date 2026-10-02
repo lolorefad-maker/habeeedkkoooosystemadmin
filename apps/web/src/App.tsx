@@ -13,6 +13,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { ReportsPage } from './features/reports/ReportsPage';
 import { ReservationsPage } from './features/reservations/ReservationsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
+import { RewardsPage } from './features/rewards/RewardsPage';
 import { StockPage } from './features/stock/StockPage';
 import { applyDocumentPrefs, usePrefs } from './i18n';
 import { ApiError } from './lib/api';
@@ -87,6 +88,14 @@ export function App() {
                 element={
                   <RequireAuth allow={can.checkout}>
                     <CafePage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/rewards"
+                element={
+                  <RequireAuth allow={can.checkout}>
+                    <RewardsPage />
                   </RequireAuth>
                 }
               />

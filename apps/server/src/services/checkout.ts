@@ -31,6 +31,7 @@ import {
 import { AFTER_DAY_END, carriedSoFar } from './carries';
 import { returnStationControllers } from './controllers';
 import { insertOrder, orderItemsInput } from './orders';
+import { customerForPhone, earnReward, rewardDiscount, useReward } from './rewards';
 import { sessionItems } from './sessions';
 
 const paymentInput = z.object({
@@ -50,7 +51,13 @@ const baseCheckout = {
   expectedTotal: z.number().int().optional(),
 };
 
-export const checkoutSessionInput = z.object(baseCheckout);
+export const checkoutSessionInput = z.object({
+  ...baseCheckout,
+  /** A device checked out without a number: register it now so a long session still earns its free hour. */
+  customerPhone: z.string().trim().max(30).nullish(),
+  /** Take this customer's free hour off the bill (instead of a hand-made discount). */
+  rewardId: z.uuid().nullish(),
+});
 
 interface ItemLine {
   id: string;
@@ -93,6 +100,8 @@ async function finalize(
     extra: Record<string, unknown>;
     /** The part of this bill an earlier day earned (it ran past that day's end): paid into that day's drawer. */
     late?: LateShare | null;
+    /** The discount is a customer's free hour: the system's own, so no manager PIN is asked for it. */
+    rewardDiscount?: boolean;
   },
 ) {
   const now = ctx.clock.now();
@@ -110,7 +119,7 @@ async function finalize(
 
   const pct = discountPercentOf(args.discount, totals.subtotal);
   const refund = totals.due < 0 ? -totals.due : 0;
-  const needsApproval = pct > policy.maxCashierDiscountPercent + 1e-9 || refund > policy.refundApprovalAbove;
+  const needsApproval = (!args.rewardDiscount && pct > policy.maxCashierDiscountPercent + 1e-9) || refund > policy.refundApprovalAbove;
   if (totals.discountAmount > 0 && !args.discountReason) {
     throw new DomainError('discount_reason_required', 'Give a reason for the discount');
   }
@@ -286,10 +295,31 @@ export async function checkoutSession(ctx: AppContext, actor: Actor, sessionId: 
       await returnStationControllers(tx, record, branch, s.stationId, now, s.id);
     }
 
+    // No number at the start? It can still be registered now.
+    if (!s.customerId && input.customerPhone) {
+      const c = await customerForPhone(tx, branch, { phone: input.customerPhone, name: s.label, strict: true });
+      if (c) {
+        await tx.update(sessions).set({ customerId: c.id, updatedAt: new Date(now) }).where(eq(sessions.id, s.id));
+        s = { ...s, customerId: c.id };
+        await record({ type: 'session.customer_set', entity: 'session', entityId: s.id, payload: { customerId: c.id } });
+      }
+    }
+
     const bctx = await loadBillingContext(tx, branch);
     const segs = (await loadSegments(tx, [s.id])).get(s.id) ?? [];
     const time = computeTimeBill(toTimeline(s, segs), bctx, s.endedAt!.getTime());
     if (time.missingRate) throw new DomainError('missing_rate', 'A station has no price configured for part of this session');
+
+    // The customer's free hour: it replaces a hand-made discount, never adds to one.
+    let discount = input.discount ?? null;
+    let discountReason = input.discountReason ?? null;
+    let redeemed: Awaited<ReturnType<typeof rewardDiscount>> | null = null;
+    if (input.rewardId) {
+      if (discount) throw new DomainError('reward_and_discount', 'A free hour cannot be combined with another discount');
+      redeemed = await rewardDiscount(tx, branch, s, time, input.rewardId);
+      discount = { kind: 'amount', value: redeemed.value };
+      discountReason = redeemed.reason;
+    }
 
     const items = await sessionItems(tx, s.id);
     const orderIds = [...new Set(items.map((i) => i.orderId))];
@@ -305,8 +335,9 @@ export async function checkoutSession(ctx: AppContext, actor: Actor, sessionId: 
       items,
       orderIds,
       paid: paid.total,
-      discount: input.discount ?? null,
-      discountReason: input.discountReason ?? null,
+      discount,
+      discountReason,
+      rewardDiscount: !!redeemed,
       payments: input.payments,
       approvalPin: input.approvalPin ?? null,
       expectedTotal: input.expectedTotal,
@@ -326,7 +357,10 @@ export async function checkoutSession(ctx: AppContext, actor: Actor, sessionId: 
     if (s.reservationId) {
       await tx.update(reservations).set({ status: 'completed', updatedAt: new Date(now) }).where(eq(reservations.id, s.reservationId));
     }
-    return result;
+
+    if (redeemed) await useReward(tx, record, redeemed.id, result.billId, s.id, now);
+    const earned = await earnReward(tx, record, branch, s, time.playedMs, await currentDay(tx, branch, now), now);
+    return { ...result, reward: earned, redeemed: redeemed ? { id: redeemed.id, minutes: redeemed.minutes, value: redeemed.value } : null };
   });
 }
 

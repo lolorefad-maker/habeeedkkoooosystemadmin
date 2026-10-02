@@ -28,6 +28,7 @@ import { closeDay, dayReport, listDays } from './services/days';
 import { floorSnapshot } from './services/floor';
 import { monthReport, rangeReport, sessionsLog } from './services/ledger';
 import { exportSetup, importSetup } from './services/setup';
+import { billCustomer, listRewards, lookupCustomer, markRewardNotified, voidReward } from './services/rewards';
 import { adjustStock, listMovements, listStock, receiveStock } from './services/stock';
 import { createOrder, voidOrderItem } from './services/orders';
 import { cancelReservation, createReservation, deleteReservation, listReservations, refundReservation } from './services/reservations';
@@ -229,7 +230,8 @@ export async function buildApp(ctx: AppContext) {
       const branch = await getBranch(ctx.db, actor.branchId);
       const s = await getSession(ctx.db, branch.id, id(req));
       const { session: _s, timeline, ...bill } = await sessionBill(ctx.db, branch, s, now());
-      return { ...bill, timeline, session: { ...s, startedAt: s.startedAt.getTime(), endedAt: s.endedAt?.getTime() ?? null } };
+      const who = await billCustomer(ctx.db, branch, s, bill.time);
+      return { ...bill, ...who, timeline, session: { ...s, startedAt: s.startedAt.getTime(), endedAt: s.endedAt?.getTime() ?? null } };
     }),
   );
 
@@ -309,6 +311,15 @@ export async function buildApp(ctx: AppContext) {
       const { from, to } = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
       return rangeReport(ctx.db, actor.branchId, from, to);
     }),
+  );
+
+  // ------------------------------------------------------------------ customer rewards
+  app.get('/api/rewards', route('checkout', async (req, actor) => listRewards(ctx.db, actor.branchId, req.query)));
+  app.post('/api/rewards/:id/notified', route('checkout', async (req, actor) => markRewardNotified(ctx, actor, id(req))));
+  app.post('/api/rewards/:id/void', route('settings.manage', async (req, actor) => voidReward(ctx, actor, id(req), req.body)));
+  app.get(
+    '/api/customers/lookup',
+    route('session.manage', async (req, actor) => lookupCustomer(ctx.db, actor.branchId, (req.query as { phone?: string }).phone)),
   );
 
   // ------------------------------------------------------------------ goods (stock)

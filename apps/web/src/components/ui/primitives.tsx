@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { useFmt } from '../../lib/format';
 
 /** Numbers, times and codes: tabular, isolated LTR so they never jump or reorder inside Arabic text. */
@@ -54,6 +54,10 @@ const inputCls =
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
   return <input ref={ref} className={clsx(inputCls, className)} {...rest} />;
+});
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, ...rest }, ref) {
+  return <textarea ref={ref} className={clsx(inputCls, 'h-auto min-h-28 py-2.5 leading-relaxed', className)} {...rest} />;
 });
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select(

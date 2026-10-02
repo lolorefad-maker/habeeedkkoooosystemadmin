@@ -31,6 +31,7 @@ import { handOverControllers, moveStationControllers, returnStationControllers }
 import { insertOrder } from './orders';
 import { assertFree, assertUsable, getStation, holdingReservation } from './stations';
 import { reverseCarries } from './carries';
+import { customerForPhone } from './rewards';
 
 export const startSessionInput = z.object({
   stationId: z.uuid(),
@@ -39,6 +40,8 @@ export const startSessionInput = z.object({
   plannedMinutes: z.number().int().min(1).max(24 * 60).nullish(),
   packageId: z.uuid().nullish(),
   label: z.string().trim().max(80).nullish(),
+  /** The customer's phone number: it earns them a free hour after a long session (see rewards). */
+  customerPhone: z.string().trim().max(30).nullish(),
   reservationId: z.uuid().nullish(),
   /** Start even though another customer's reservation is holding the station. */
   overrideReservation: z.boolean().optional(),
@@ -114,6 +117,13 @@ export async function startSession(ctx: AppContext, actor: Actor, raw: unknown) 
       if (reservation.status !== 'confirmed') throw new DomainError('reservation_not_confirmed', 'Reservation is not active');
     }
 
+    // The number typed now, or the one given when booking.
+    const customer = await customerForPhone(tx, branch, {
+      phone: input.customerPhone || reservation?.customerPhone,
+      name: input.label || reservation?.customerName,
+      strict: !!input.customerPhone,
+    });
+
     const id = newId();
     await tx.insert(sessions).values({
       id,
@@ -121,6 +131,7 @@ export async function startSession(ctx: AppContext, actor: Actor, raw: unknown) 
       kind,
       plannedMinutes,
       packageId: input.packageId ?? null,
+      customerId: customer?.id ?? reservation?.customerId ?? null,
       label: input.label || reservation?.customerName || null,
       status: 'running',
       stationId: station.id,
@@ -167,7 +178,7 @@ export async function startSession(ctx: AppContext, actor: Actor, raw: unknown) 
       type: 'session.started',
       entity: 'session',
       entityId: id,
-      payload: { stationId: station.id, mode: input.mode, kind, plannedMinutes, packageId: input.packageId ?? null, prepaid: input.prepaid ?? null },
+      payload: { stationId: station.id, mode: input.mode, kind, plannedMinutes, packageId: input.packageId ?? null, prepaid: input.prepaid ?? null, customerId: customer?.id ?? null },
       reason: hold && input.overrideReservation ? 'override_reservation' : null,
     });
     return { id, stock: order?.stock ?? [] };

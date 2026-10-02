@@ -1,6 +1,6 @@
-import { computeCheckout, parseMoney, type DiscountInput } from '@lounge/core';
+import { computeCheckout, earnsReward, normalizePhone, parseMoney, type DiscountInput } from '@lounge/core';
 import { clsx } from 'clsx';
-import { Banknote, CircleCheck, CreditCard, Percent, Printer, TriangleAlert } from 'lucide-react';
+import { Banknote, CircleCheck, CreditCard, Gift, Percent, Printer, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { errorMessage, withApproval } from '../../components/ui/feedback';
@@ -11,12 +11,16 @@ import { ApiError, get, post } from '../../lib/api';
 import { useFmt } from '../../lib/format';
 import { useFloor, useSessionBill } from '../../lib/queries';
 import type { Bill } from '../../lib/types';
+import { PhoneField } from '../rewards/PhoneField';
+import { WhatsAppButton } from '../rewards/WhatsAppButton';
 
 /** What a checkout answers: the bill, and the part an earlier day's drawer took (it played past that day's end). */
 interface CheckoutDone {
   billId: string;
   number: number;
   late?: { amount: number; cash: number; shiftId: string; userName: string; closedAt: number | null } | null;
+  /** A free hour this checkout earned for the customer (ready to tell them on WhatsApp). */
+  reward?: { id: string; minutes: number; playedMinutes: number; name: string; phone: string } | null;
 }
 import { TimeLines } from './BillBreakdown';
 import { printReceipt } from './receipt';
@@ -38,6 +42,8 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
   const [discountKind, setDiscountKind] = useState<'percent' | 'amount'>('percent');
   const [discountValue, setDiscountValue] = useState('');
   const [discountReason, setDiscountReason] = useState('');
+  const [rewardOn, setRewardOn] = useState(false);
+  const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<'cash' | 'card'>('cash');
   const [received, setReceived] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,8 +52,15 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
 
   const settings = floor.data?.branch.settings;
   const data = sessionBill.data ?? null;
+  const policy = settings?.rewards;
+  // The customer's free time replaces a hand-made discount (the server prices it the same way).
+  const reward = rewardOn && data?.reward ? data.reward : null;
+  const phoneOk = !!policy && normalizePhone(phone, policy.countryCode) != null;
+  // Played long enough for a free hour but nobody's number is registered yet.
+  const askPhone = !!policy?.enabled && !!data && !data.customer && earnsReward(data.time.playedMs, policy.afterMinutes);
 
   const discount: DiscountInput | null = useMemo(() => {
+    if (reward) return { kind: 'amount', value: reward.value };
     if (!discountOn || !discountValue) return null;
     if (discountKind === 'percent') {
       const v = Number(discountValue);
@@ -55,7 +68,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
     }
     const m = parseMoney(discountValue, f.decimals);
     return m && m > 0 ? { kind: 'amount', value: m } : null;
-  }, [discountOn, discountKind, discountValue, f.decimals]);
+  }, [reward, discountOn, discountKind, discountValue, f.decimals]);
 
   const totals = useMemo(
     () =>
@@ -81,15 +94,18 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
     setBusy(true);
     setError(null);
     const body = {
-      discount,
-      discountReason: discount ? discountReason.trim() || null : null,
+      // A free hour is priced by the server; it is sent as the reward, not as a hand-made discount.
+      discount: reward ? null : discount,
+      discountReason: !reward && discount ? discountReason.trim() || null : null,
+      rewardId: reward?.id ?? null,
+      customerPhone: askPhone && phoneOk ? phone.trim() : null,
       payments: due === 0 ? [] : [{ method, amount: due }],
       expectedTotal: totals.total,
     };
     try {
       const res = await withApproval(
         (pin) => post<CheckoutDone>(`/api/sessions/${sessionId}/checkout`, { ...body, approvalPin: pin }),
-        discount ? `${t('checkout.discount')} ${discount.kind === 'percent' ? `${discount.value}%` : f.money(discount.value)}` : due < 0 ? `${t('checkout.refund')} ${f.money(-due)}` : '',
+        discount && !reward ? `${t('checkout.discount')} ${discount.kind === 'percent' ? `${discount.value}%` : f.money(discount.value)}` : due < 0 ? `${t('checkout.refund')} ${f.money(-due)}` : '',
       );
       setDone(res);
     } catch (err) {
@@ -131,6 +147,21 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
               <div className="mt-1 text-xs text-muted">{t('checkout.lateHint')}</div>
             </div>
           )}
+          {/* A long session: the customer earned free time — tell them on WhatsApp. */}
+          {done.reward && policy && (
+            <div data-status="free" className="tint flex w-full flex-col gap-3 rounded-card border p-3.5 text-start">
+              <div className="flex items-center gap-2 font-semibold">
+                <Gift className="size-5 shrink-0" aria-hidden />
+                {t('rewards.earned', { free: f.span(done.reward.minutes * 60_000) })}
+              </div>
+              <div className="text-sm text-muted">
+                {done.reward.name !== done.reward.phone && <span className="font-medium text-fg">{done.reward.name} · </span>}
+                <Num>+{done.reward.phone}</Num>
+                <div className="mt-1 text-xs">{t('rewards.earnedHint')}</div>
+              </div>
+              <WhatsAppButton reward={done.reward} size="lg" block />
+            </div>
+          )}
           <div className="mt-2 flex w-full gap-2">
             <Button block size="lg" icon={<Printer className="size-5" />} onClick={print}>
               {t('checkout.printReceipt')}
@@ -161,7 +192,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
               <TriangleAlert className="size-4 shrink-0" /> {error}
             </div>
           )}
-          <Button variant={due < 0 ? 'danger' : 'primary'} size="xl" block loading={busy} disabled={!totals || (discount != null && !discountReason.trim())} onClick={confirm}>
+          <Button variant={due < 0 ? 'danger' : 'primary'} size="xl" block loading={busy} disabled={!totals || (discount != null && !reward && !discountReason.trim()) || (askPhone && phone.trim() !== '' && !phoneOk)} onClick={confirm}>
             {due < 0 ? t('checkout.confirmRefund') : t('checkout.confirm')}
             {totals && due !== 0 && (
               <span className="ms-1">
@@ -221,7 +252,43 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
               <Money value={Math.abs(due)} currency className="mt-1 justify-center text-4xl font-bold" />
             </div>
 
-            {!discountOn ? (
+            {/* The customer's free time, when one is waiting for this number. */}
+            {data.reward && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={rewardOn}
+                onClick={() => {
+                  setRewardOn((v) => !v);
+                  setDiscountOn(false);
+                  setDiscountValue('');
+                  setDiscountReason('');
+                }}
+                data-status={rewardOn ? 'free' : undefined}
+                className={clsx(
+                  'flex items-center gap-3 rounded-card border p-3 text-start transition-colors',
+                  rewardOn ? 'tint-strong' : 'border-line hover:border-line-strong hover:bg-surface-2',
+                )}
+              >
+                <Gift className={clsx('size-5 shrink-0', rewardOn ? 'st-fg' : 'text-muted')} aria-hidden />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm font-semibold">{t('rewards.use')}</span>
+                  <span className="text-xs text-muted">{t('rewards.useHint', { amount: f.money(data.reward.value) })}</span>
+                </span>
+                <span className="text-xs font-medium text-muted">{f.span(data.reward.minutes * 60_000)}</span>
+              </button>
+            )}
+
+            {askPhone && policy && (
+              <PhoneField
+                id="checkout-phone"
+                value={phone}
+                onChange={setPhone}
+                hint={t('rewards.checkoutHint', { after: f.span(policy.afterMinutes * 60_000), free: f.span(policy.freeMinutes * 60_000) })}
+              />
+            )}
+
+            {rewardOn ? null : !discountOn ? (
               <Button variant="ghost" icon={<Percent className="size-4" />} onClick={() => setDiscountOn(true)}>
                 {t('checkout.addDiscount')}
               </Button>

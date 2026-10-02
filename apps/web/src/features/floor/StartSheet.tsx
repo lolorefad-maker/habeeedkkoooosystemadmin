@@ -33,6 +33,7 @@ import { useProducts } from '../../lib/queries';
 import type { Floor, Reservation } from '../../lib/types';
 import { announceStock, CartLines, cartTotal, QuickProducts, useCart, type StockLeft } from '../cafe/products';
 import { ControllerPicker } from '../controllers/parts';
+import { PhoneField } from '../rewards/PhoneField';
 
 type Kind = 'open' | 'fixed' | 'package';
 const QUICK_MINUTES = [30, 60, 90, 120, 180];
@@ -62,6 +63,7 @@ export function StartSheet({
   const [minutes, setMinutes] = useState(60);
   const [packageId, setPackageId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
+  const [phone, setPhone] = useState('');
   const [showName, setShowName] = useState(false);
   const [showDrinks, setShowDrinks] = useState(false);
   const [prepaid, setPrepaid] = useState(false);
@@ -81,6 +83,8 @@ export function StartSheet({
     () => ctx.packages.filter((p) => p.active && packageMatches(p, { id: station.id, type: station.type, tier: station.tier }, mode)),
     [ctx.packages, station, mode],
   );
+
+  const rewards = floor.branch.settings.rewards;
 
   const quote = rateNow(ctx, station, mode, now);
   const selectedPkg = matchingPackages.find((p) => p.id === packageId) ?? null;
@@ -117,6 +121,7 @@ export function StartSheet({
       plannedMinutes: kind === 'fixed' ? minutes : null,
       packageId: kind === 'package' ? packageId : null,
       label: label.trim() || null,
+      customerPhone: phone.trim() || null,
       reservationId: withReservation && reservation ? reservation.id : null,
       overrideReservation: !withReservation && holding ? true : undefined,
       prepaid: prepaid && !noShift && paidMinor ? { amount: paidMinor, method } : null,
@@ -322,7 +327,17 @@ export function StartSheet({
           <OptionRow
             icon={<UserRound />}
             label={t('start.customer')}
-            summary={label.trim() || t('common.optional')}
+            summary={
+              label.trim() || phone.trim() ? (
+                <>
+                  {label.trim()}
+                  {label.trim() && phone.trim() && ' · '}
+                  {phone.trim() && <Num>{phone.trim()}</Num>}
+                </>
+              ) : (
+                t('common.optional')
+              )
+            }
             open={showName}
             onToggle={() => setShowName((v) => !v)}
           >
@@ -334,6 +349,16 @@ export function StartSheet({
               placeholder={t('start.customerPh')}
               maxLength={80}
             />
+            {rewards?.enabled && (
+              <div className="mt-3">
+                <PhoneField
+                  id="start-phone"
+                  value={phone}
+                  onChange={setPhone}
+                  hint={t('rewards.startHint', { after: f.span(rewards.afterMinutes * 60_000), free: f.span(rewards.freeMinutes * 60_000) })}
+                />
+              </div>
+            )}
           </OptionRow>
 
           <OptionRow

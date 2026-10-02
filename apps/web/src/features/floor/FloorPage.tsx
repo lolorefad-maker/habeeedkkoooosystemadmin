@@ -21,6 +21,7 @@ import { NewReservation, ReservationDetails } from '../reservations/Reservations
 import { QuickDiscountBar, QuickDiscountButton } from './QuickDiscount';
 import { StationCard } from './StationCard';
 import { StationSheet } from './StationSheet';
+import { RewardsLink } from './RewardsLink';
 import { StockButton } from './StockButton';
 
 type Filter = 'all' | string;
@@ -286,6 +287,7 @@ export function FloorPage() {
             )}
           </Link>
           {can.stock(role) && <StockButton />}
+          {can.checkout(role) && <RewardsLink />}
           {can.settings(role) && floor.data && <QuickDiscountButton floor={floor.data} ctx={ctx} now={now} />}
         </div>
       </div>

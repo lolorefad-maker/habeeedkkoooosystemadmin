@@ -67,12 +67,31 @@ export const controllerPolicySchema = z.object({
   returnOnEnd: z.boolean().default(true),
 });
 
+export const DEFAULT_REWARD_MESSAGE = [
+  'أهلاً {name} 👋',
+  'شكراً لزيارتك {shop}! لعبت {played} وكسبت {free} مجاناً 🎁',
+  'بتستخدمها بزيارتك الجاية، بس عطينا هالرقم لما تيجي.',
+].join('\n');
+
+export const rewardPolicySchema = z.object({
+  /** A session of more than `afterMinutes` earns a free time for the phone number it was registered with. */
+  enabled: z.boolean().default(true),
+  afterMinutes: z.number().int().min(30).max(24 * 60).default(240),
+  /** The free time one reward gives. */
+  freeMinutes: z.number().int().min(5).max(24 * 60).default(60),
+  /** Added to numbers typed without a country code ("079…"): 962 = Jordan. */
+  countryCode: z.string().regex(/^\d{1,4}$/).default('962'),
+  /** The WhatsApp message: {name} {played} {free} {shop}. */
+  message: z.string().trim().min(5).max(600).default(DEFAULT_REWARD_MESSAGE),
+});
+
 export const branchSettingsSchema = z.object({
   billing: billingPolicySchema.prefault({}),
   reservations: reservationPolicySchema.prefault({}),
   checkout: checkoutPolicySchema.prefault({}),
   day: dayPolicySchema.prefault({}),
   controllers: controllerPolicySchema.prefault({}),
+  rewards: rewardPolicySchema.prefault({}),
 });
 
 export type BillingPolicy = z.output<typeof billingPolicySchema>;
@@ -80,6 +99,7 @@ export type ReservationPolicy = z.output<typeof reservationPolicySchema>;
 export type CheckoutPolicy = z.output<typeof checkoutPolicySchema>;
 export type DayPolicy = z.output<typeof dayPolicySchema>;
 export type ControllerPolicy = z.output<typeof controllerPolicySchema>;
+export type RewardPolicy = z.output<typeof rewardPolicySchema>;
 export type BranchSettings = z.output<typeof branchSettingsSchema>;
 
 export function parseBranchSettings(raw: unknown): BranchSettings {

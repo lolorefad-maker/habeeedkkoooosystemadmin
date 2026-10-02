@@ -161,6 +161,20 @@ describe('cafeteria', () => {
     expect(row).toMatchObject({ counter: true, total: 1500, itemsTotal: 1500, timeCharge: 0, items: [{ name: 'بيبسي', qty: 2 }] });
   });
 
+  it('a cash sale lands in the open shift’s drawer and in the day’s cash', async () => {
+    const shiftNow = async () => (await h.api('GET', '/api/shifts/current', undefined, h.tokens.cashier)).json.shift;
+    const cashOfDay = async () => (await report('2026-10-07')).payments.byMethod.cash ?? 0;
+    const pepsi = ((await h.api('GET', '/api/products', undefined, h.tokens.cashier)).json as Json[]).find((p) => p.name === 'بيبسي');
+    const [drawer, cash] = [(await shiftNow()).expectedCash, await cashOfDay()];
+
+    const sale = await h.api('POST', '/api/counter/sale', { items: [{ productId: pepsi.id, qty: 1 }], payments: [{ method: 'cash', amount: pepsi.price }] }, h.tokens.cashier);
+    expect(sale.status).toBe(200);
+    expect((await shiftNow()).expectedCash).toBe(drawer + pepsi.price);
+    expect(await cashOfDay()).toBe(cash + pepsi.price);
+    const rows = (await log('2026-10-07')).filter((r) => r.counter);
+    expect(rows.some((r) => r.total === pepsi.price && r.paidByMethod?.cash === pepsi.price)).toBe(true);
+  });
+
   it('no drawer, no sale (and nothing leaves the stock)', async () => {
     const shift = (await h.api('GET', '/api/shifts/current', undefined, h.tokens.cashier)).json.shift;
     await h.api('POST', '/api/shifts/close', { countedCash: shift.expectedCash }, h.tokens.cashier);

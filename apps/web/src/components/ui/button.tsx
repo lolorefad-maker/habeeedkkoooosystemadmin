@@ -23,6 +23,17 @@ const sizes: Record<Size, string> = {
   icon: 'h-10 w-10 rounded-control',
 };
 
+/** The look of a button, for a link that must look like one (e.g. opening WhatsApp). */
+export function buttonClass({ variant = 'secondary', size = 'md', block, className }: { variant?: Variant; size?: Size; block?: boolean; className?: string } = {}) {
+  return clsx(
+    'inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-[background,color,box-shadow,transform,filter] duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45',
+    variants[variant],
+    sizes[size],
+    block && 'w-full',
+    className,
+  );
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
@@ -40,13 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       disabled={disabled || loading}
-      className={clsx(
-        'inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-[background,color,box-shadow,transform,filter] duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45',
-        variants[variant],
-        sizes[size],
-        block && 'w-full',
-        className,
-      )}
+      className={buttonClass({ variant, size, block, className })}
       {...rest}
     >
       {loading ? <LoaderCircle className="size-[1.1em] animate-spin" aria-hidden /> : icon}

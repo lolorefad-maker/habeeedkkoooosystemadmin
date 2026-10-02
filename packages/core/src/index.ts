@@ -7,5 +7,6 @@ export * from './policies';
 export * from './pricing';
 export * from './reports';
 export * from './reservations';
+export * from './rewards';
 export * from './session';
 export * from './time';

@@ -221,6 +221,33 @@ export interface SessionBill {
   paidByMethod: Record<string, number>;
   totals: CheckoutTotals;
   session: { id: string; status: string; startedAt: number; endedAt: number | null; label: string | null; stationId: string };
+  /** The phone number behind the session, and the free hour waiting for it (with what it is worth on this bill). */
+  customer: { id: string; name: string; phone: string } | null;
+  reward: { id: string; minutes: number; value: number } | null;
+}
+
+/** A free hour earned by a long session, kept for a phone number until it is used. */
+export interface Reward {
+  id: string;
+  customerId: string;
+  name: string;
+  /** Digits with the country code. */
+  phone: string;
+  minutes: number;
+  playedMinutes: number;
+  status: 'available' | 'used' | 'void';
+  earnedDay: string;
+  earnedAt: number;
+  usedAt: number | null;
+  /** When WhatsApp was opened with the message (it cannot be known that it was sent). */
+  notifiedAt: number | null;
+  voidReason: string | null;
+}
+
+export interface CustomerLookup {
+  phone: string;
+  name: string | null;
+  available: number;
 }
 
 export interface Bill {

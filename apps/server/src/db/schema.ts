@@ -128,7 +128,7 @@ export const customers = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('customers_phone_idx').on(t.phone)],
+  (t) => [index('customers_phone_idx').on(t.phone), uniqueIndex('customers_org_phone_uq').on(t.orgId, t.phone)],
 );
 
 export const walletTransactions = pgTable('wallet_transactions', {
@@ -419,6 +419,39 @@ export const dayCarries = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('day_carries_branch_day_idx').on(t.branchId, t.businessDay), index('day_carries_session_idx').on(t.sessionId)],
+);
+
+/**
+ * A free time earned by a long session ("People Rewards"), kept for the customer's phone number until
+ * it is used on a later bill. Never deleted: a wrong one is voided with a reason.
+ */
+export const rewards = pgTable(
+  'rewards',
+  {
+    id: uuid('id').primaryKey(),
+    branchId: uuid('branch_id').notNull().references(() => branches.id),
+    customerId: uuid('customer_id').notNull().references(() => customers.id),
+    /** The session that earned it — one reward per session. */
+    earnedSessionId: uuid('earned_session_id').notNull(),
+    earnedDay: text('earned_day').notNull(),
+    /** The free time (minutes) and how long the session played (for the message). */
+    minutes: integer('minutes').notNull(),
+    playedMinutes: integer('played_minutes').notNull(),
+    status: text('status').$type<'available' | 'used' | 'void'>().notNull().default('available'),
+    usedAt: ts('used_at'),
+    usedSessionId: uuid('used_session_id'),
+    usedBillId: uuid('used_bill_id'),
+    /** When the cashier opened WhatsApp with the message (we cannot know it was sent). */
+    notifiedAt: ts('notified_at'),
+    voidReason: text('void_reason'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('rewards_earned_session_uq').on(t.earnedSessionId),
+    index('rewards_branch_status_idx').on(t.branchId, t.status),
+    index('rewards_customer_idx').on(t.customerId),
+  ],
 );
 
 /** One row per business day. Exactly one is open per branch; closing it opens the next. */

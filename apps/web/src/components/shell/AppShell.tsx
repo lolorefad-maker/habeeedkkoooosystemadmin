@@ -3,6 +3,7 @@ import {
   BarChart3,
   BatteryFull,
   Boxes,
+  Gift,
   Coffee,
   CalendarDays,
   Gamepad,
@@ -49,6 +50,7 @@ const NAV: NavItem[] = [
   { to: '/controllers', label: 'nav.controllers', icon: Gamepad, mobile: true },
   { to: '/reservations', label: 'nav.reservations', icon: CalendarDays, allow: can.reservations, mobile: true },
   { to: '/stock', label: 'nav.stock', icon: Boxes, allow: can.stock, mobile: true },
+  { to: '/rewards', label: 'nav.rewards', icon: Gift, allow: can.checkout },
   { to: '/reports', label: 'nav.reports', icon: BarChart3, allow: can.reports, mobile: true },
   { to: '/settings', label: 'nav.settings', icon: Settings, allow: can.settings, mobile: true },
 ];
