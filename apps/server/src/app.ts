@@ -60,6 +60,7 @@ import {
   stopQuickDiscount,
   updateBranch,
 } from './services/settings';
+import { createWithdrawal, listWithdrawals, voidWithdrawal } from './services/withdrawals';
 import { countClosedShift, currentShift, startShift } from './services/shifts';
 
 declare module 'fastify' {
@@ -279,6 +280,15 @@ export async function buildApp(ctx: AppContext) {
   // ------------------------------------------------------------------ shifts & days
   app.get('/api/shifts/current', route('floor.view', async (_req, actor) => ({ shift: await currentShift(ctx.db, actor.branchId) })));
   app.post('/api/shifts/open', route('shift.manage', async (req, actor) => startShift(ctx, actor, req.body)));
+  app.post('/api/withdrawals', route('shift.manage', async (req, actor) => createWithdrawal(ctx, actor, req.body)));
+  app.post('/api/withdrawals/:id/void', route('shift.manage', async (req, actor) => voidWithdrawal(ctx, actor, id(req), req.body)));
+  app.get(
+    '/api/withdrawals',
+    route('reports.view', async (req, actor) => {
+      const { day } = z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+      return listWithdrawals(ctx.db, actor.branchId, day);
+    }),
+  );
   app.post('/api/shifts/close', route('shift.manage', async (req, actor) => endShiftAndDay(ctx, actor, req.body)));
   // Count, afterwards, a shift that closed by itself at the day's end.
   app.post('/api/shifts/:id/count', route('shift.manage', async (req, actor) => countClosedShift(ctx, actor, id(req), req.body)));

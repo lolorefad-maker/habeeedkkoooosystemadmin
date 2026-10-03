@@ -51,6 +51,10 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const { busy, run } = useAction();
+  const take = useAction();
+  const [takeAmount, setTakeAmount] = useState('');
+  const [takeNote, setTakeNote] = useState('');
+  const takeMinor = takeAmount.trim() ? parseMoney(takeAmount, f.decimals) : null;
   const minor = parseMoney(amount || '0', f.decimals);
   // Devices still playing when the shift is closed are paid on the next day, whole.
   const running = (floor.data?.sessions ?? []).filter((s) => s.status === 'running').length;
@@ -70,6 +74,16 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
       setAmount('');
       setNote('');
       onOpenChange(false);
+    }
+  };
+
+  // The accountant takes cash: the drawer holds less, income does not change, the shift stays open.
+  const submitTake = async () => {
+    if (takeMinor == null || takeMinor <= 0) return;
+    const ok = await take.run(() => post('/api/withdrawals', { amount: takeMinor, note: takeNote.trim() || null }), { success: t('shift.takeDone') });
+    if (ok) {
+      setTakeAmount('');
+      setTakeNote('');
     }
   };
 
@@ -109,6 +123,53 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
             <div className="mt-1 text-xs text-faint">
               <Num>{shift.transactions}</Num> {t('shift.transactions')}
             </div>
+          </div>
+        )}
+        {shift && (
+          <div className="flex flex-col gap-2.5 rounded-card border border-line p-3.5">
+            <div className="text-sm font-semibold">{t('shift.take')}</div>
+            <p className="text-xs text-muted">{t('shift.takeHint')}</p>
+            {shift.withdrawals.length > 0 && (
+              <ul className="flex flex-col divide-y divide-line rounded-control bg-surface-2 text-sm">
+                {shift.withdrawals.map((w) => (
+                  <li key={w.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="min-w-0 truncate text-muted">
+                      <span className="tabular-nums">{f.time(w.createdAt)}</span>
+                      {w.note && <span> · {w.note}</span>}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Money value={w.amount} className="font-semibold" />
+                      <button
+                        type="button"
+                        className="text-xs text-danger underline-offset-2 hover:underline"
+                        onClick={() => take.run(() => post(`/api/withdrawals/${w.id}/void`, {}), { success: t('shift.takeCancelled') })}
+                      >
+                        {t('common.cancel')}
+                      </button>
+                    </span>
+                  </li>
+                ))}
+                <li className="flex items-center justify-between px-3 py-2 font-semibold">
+                  <span>{t('common.total')}</span>
+                  <Money value={shift.withdrawn} />
+                </li>
+              </ul>
+            )}
+            <div className="flex gap-2">
+              <Input
+                inputMode="decimal"
+                aria-label={t('shift.take')}
+                className="num text-center"
+                placeholder={f.money(0)}
+                value={takeAmount}
+                onChange={(e) => setTakeAmount(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitTake()}
+              />
+              <Button variant="secondary" className="shrink-0" loading={take.busy} disabled={takeMinor == null || takeMinor <= 0} onClick={submitTake}>
+                {t('shift.takeSave')}
+              </Button>
+            </div>
+            <Input value={takeNote} onChange={(e) => setTakeNote(e.target.value)} placeholder={t('shift.takeNote')} aria-label={t('shift.takeNote')} maxLength={200} />
           </div>
         )}
         <Field label={shift ? t('shift.counted') : t('shift.float')} htmlFor="shift-amount">

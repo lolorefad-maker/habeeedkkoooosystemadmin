@@ -24,7 +24,7 @@ import { Card, Input, Money, Num, Row, SectionTitle, Skeleton } from '../../comp
 import { useT, type TKey } from '../../i18n';
 import { can, useAuth } from '../../lib/auth';
 import { useFmt } from '../../lib/format';
-import { useDayReport, useDays, useFloor, useSessionsLog } from '../../lib/queries';
+import { useDayReport, useDays, useFloor, useSessionsLog, useWithdrawals } from '../../lib/queries';
 import { CafeLog, DailyLog } from './DailyLog';
 import { CountOldShift } from '../../components/shell/ShiftPill';
 import { Modal } from '../../components/ui/overlays';
@@ -219,6 +219,8 @@ function DaySummary({ r }: { r: DayReport }) {
   const floor = useFloor();
   const devices = (log.data ?? []).filter((x) => !x.counter && !x.carried).length + (r.status === 'open' ? r.openSessions.count : 0);
   const live = r.status === 'open' ? floor.data?.shift : null;
+  const taken = useWithdrawals(r.day).data ?? [];
+  const takenTotal = taken.reduce((a, w) => a + w.amount, 0);
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1.2fr] lg:gap-4">
       <Card className="relative overflow-hidden p-5">
@@ -263,6 +265,20 @@ function DaySummary({ r }: { r: DayReport }) {
               )}
             </div>
           ))
+        )}
+        {taken.length > 0 && (
+          <div data-status="ending" className="tint mt-1 flex flex-col gap-1 rounded-control border p-2.5 text-sm">
+            <Row className="!py-0" label={<span className="font-semibold">{t('ledger.accountantTook')}</span>} value={<Money value={takenTotal} className="font-semibold" />} />
+            {taken.map((w) => (
+              <div key={w.id} className="flex items-center justify-between gap-2 text-xs text-muted">
+                <span className="truncate">
+                  <span className="tabular-nums">{f.time(w.createdAt)}</span>
+                  {w.note && <span> · {w.note}</span>}
+                </span>
+                <Money value={w.amount} />
+              </div>
+            ))}
+          </div>
         )}
       </Card>
     </div>
