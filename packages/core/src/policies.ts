@@ -46,7 +46,7 @@ export const checkoutPolicySchema = z.object({
   /** Round bill totals to this many minor units (e.g. 50 = nearest 0.050). 0 = exact. */
   cashRounding: z.number().int().min(0).default(0),
   /** Cashiers may discount up to this percent without a manager PIN. */
-  maxCashierDiscountPercent: z.number().min(0).max(100).default(10),
+  maxCashierDiscountPercent: z.number().min(0).max(100).default(100),
   /** Refunds above this amount (minor units) need a manager PIN. */
   refundApprovalAbove: z.number().int().min(0).default(0),
   /** Voiding an order item needs a manager PIN. */

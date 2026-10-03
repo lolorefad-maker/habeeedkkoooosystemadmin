@@ -49,13 +49,14 @@ describe('customers: the numbers page', () => {
 });
 
 describe('checkout: the cashier charges a chosen amount', () => {
-  it('a special price is a discount from the shop; the charged amount is what the drawer takes', async () => {
+  it('a special price is a discount from the shop, with no manager PIN; the charged amount is what the drawer takes', async () => {
     const s = await h.api('POST', '/api/sessions', { stationId: station('VIP-2').id, mode: 'single', kind: 'open' }, cashier());
     h.advance(60);
     const bill = (await h.api('GET', `/api/sessions/${s.json.id}/bill`, undefined, cashier())).json as Json;
     const total = bill.totals.due as number;
     expect(total).toBeGreaterThan(0);
-    const charge = Math.floor(total * 0.95);
+    // Far above any old 10% limit: the cashier needs no manager for it.
+    const charge = Math.floor(total * 0.4);
     const r = await h.api('POST', `/api/sessions/${s.json.id}/checkout`, {
       discount: { kind: 'amount', value: total - charge },
       discountReason: 'special price',

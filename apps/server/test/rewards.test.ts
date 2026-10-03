@@ -116,7 +116,7 @@ describe('using the free hour', () => {
     const both = await h.api('POST', `/api/sessions/${s.json.id}/checkout`, { rewardId: b.reward.id, discount: { kind: 'percent', value: 5 }, discountReason: 'x', payments: [] }, cashier());
     expect(both.json.code).toBe('reward_and_discount');
 
-    // 4.000 off 6.000 is far above the cashier's 10% limit — the reward needs no manager.
+    // 4.000 off 6.000 is far above a limit — the reward needs no manager.
     const paid = await h.api('POST', `/api/sessions/${s.json.id}/checkout`, { rewardId: b.reward.id, expectedTotal: 2000, payments: [{ method: 'cash', amount: 2000 }] }, cashier());
     expect(paid.status).toBe(200);
     expect(paid.json.redeemed).toMatchObject({ minutes: 60, value: 4000 });
