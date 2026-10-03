@@ -244,6 +244,19 @@ export interface Reward {
   voidReason: string | null;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  /** Digits with the country code. */
+  phone: string;
+  notes: string | null;
+  createdAt: number;
+  visits: number;
+  lastVisitAt: number | null;
+  /** Free hours waiting for this number. */
+  freeAvailable: number;
+}
+
 export interface CustomerLookup {
   phone: string;
   name: string | null;

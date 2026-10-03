@@ -2,7 +2,7 @@ import type { DayReport } from '@lounge/core';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import { useAuth } from './auth';
-import type { CustomerLookup, Floor, LedgerRow, MonthReport, RangeReport, Product, Reservation, Reward, SessionBill, Shift, Station, StockMovement } from './types';
+import type { Customer, CustomerLookup, Floor, LedgerRow, MonthReport, RangeReport, Product, Reservation, Reward, SessionBill, Shift, Station, StockMovement } from './types';
 
 /** The floor snapshot is the heartbeat of the app: refetched on every live event. */
 export function useFloor() {
@@ -31,6 +31,10 @@ export function useSessionBill(id: string | null) {
 
 export function useRewards(status: 'all' | 'available' | 'used' | 'void' = 'all') {
   return useQuery({ queryKey: ['rewards', status], queryFn: () => get<Reward[]>(`/api/rewards?status=${status}`) });
+}
+
+export function useCustomers() {
+  return useQuery({ queryKey: ['customers'], queryFn: () => get<Customer[]>('/api/customers') });
 }
 
 /** Who is behind this number — and does a free hour wait for them? Only asks once the number looks complete. */

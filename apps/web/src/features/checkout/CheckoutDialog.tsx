@@ -1,6 +1,6 @@
-import { computeCheckout, earnsReward, normalizePhone, parseMoney, type DiscountInput } from '@lounge/core';
+import { computeCheckout, earnsReward, normalizePhone, parseMoney, roundToUnit, type DiscountInput } from '@lounge/core';
 import { clsx } from 'clsx';
-import { Banknote, CircleCheck, CreditCard, Gift, Percent, Printer, TriangleAlert } from 'lucide-react';
+import { Banknote, CircleCheck, CreditCard, Gift, Printer, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { errorMessage, withApproval } from '../../components/ui/feedback';
@@ -38,8 +38,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
   const f = useFmt();
   const floor = useFloor();
   const sessionBill = useSessionBill(sessionId);
-  const [discountOn, setDiscountOn] = useState(false);
-  const [discountKind, setDiscountKind] = useState<'percent' | 'amount'>('percent');
+  const [discountKind, setDiscountKind] = useState<'final' | 'percent' | 'amount'>('final');
   const [discountValue, setDiscountValue] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const [rewardOn, setRewardOn] = useState(false);
@@ -59,16 +58,28 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
   // Played long enough for a free hour but nobody's number is registered yet.
   const askPhone = !!policy?.enabled && !!data && !data.customer && earnsReward(data.time.playedMs, policy.afterMinutes);
 
+  // What the bill comes to before any discount: the "amount to charge" box works down from it.
+  const subtotal = useMemo(
+    () => (data && settings ? computeCheckout({ timeCharge: data.time?.total ?? 0, items: data.items, discount: null, cashRounding: settings.checkout.cashRounding, paid: 0 }).subtotal : 0),
+    [data, settings],
+  );
+
   const discount: DiscountInput | null = useMemo(() => {
     if (reward) return { kind: 'amount', value: reward.value };
-    if (!discountOn || !discountValue) return null;
+    if (!discountValue) return null;
     if (discountKind === 'percent') {
       const v = Number(discountValue);
       return Number.isFinite(v) && v > 0 ? { kind: 'percent', value: Math.min(100, v) } : null;
     }
     const m = parseMoney(discountValue, f.decimals);
-    return m && m > 0 ? { kind: 'amount', value: m } : null;
-  }, [reward, discountOn, discountKind, discountValue, f.decimals]);
+    if (!m || m <= 0) return null;
+    if (discountKind === 'final') {
+      // The cashier says what to charge; the rest is the shop's own discount.
+      const charge = roundToUnit(m, settings?.checkout.cashRounding ?? 0);
+      return charge < subtotal ? { kind: 'amount', value: subtotal - charge } : null;
+    }
+    return { kind: 'amount', value: m };
+  }, [reward, discountKind, discountValue, f.decimals, settings, subtotal]);
 
   const totals = useMemo(
     () =>
@@ -96,7 +107,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
     const body = {
       // A free hour is priced by the server; it is sent as the reward, not as a hand-made discount.
       discount: reward ? null : discount,
-      discountReason: !reward && discount ? discountReason.trim() || null : null,
+      discountReason: !reward && discount ? discountReason.trim() || t('checkout.houseDiscount') : null,
       rewardId: reward?.id ?? null,
       customerPhone: askPhone && phoneOk ? phone.trim() : null,
       payments: due === 0 ? [] : [{ method, amount: due }],
@@ -192,7 +203,7 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
               <TriangleAlert className="size-4 shrink-0" /> {error}
             </div>
           )}
-          <Button variant={due < 0 ? 'danger' : 'primary'} size="xl" block loading={busy} disabled={!totals || (discount != null && !reward && !discountReason.trim()) || (askPhone && phone.trim() !== '' && !phoneOk)} onClick={confirm}>
+          <Button variant={due < 0 ? 'danger' : 'primary'} size="xl" block loading={busy} disabled={!totals || (askPhone && phone.trim() !== '' && !phoneOk)} onClick={confirm}>
             {due < 0 ? t('checkout.confirmRefund') : t('checkout.confirm')}
             {totals && due !== 0 && (
               <span className="ms-1">
@@ -260,7 +271,6 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
                 aria-checked={rewardOn}
                 onClick={() => {
                   setRewardOn((v) => !v);
-                  setDiscountOn(false);
                   setDiscountValue('');
                   setDiscountReason('');
                 }}
@@ -288,11 +298,8 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
               />
             )}
 
-            {rewardOn ? null : !discountOn ? (
-              <Button variant="ghost" icon={<Percent className="size-4" />} onClick={() => setDiscountOn(true)}>
-                {t('checkout.addDiscount')}
-              </Button>
-            ) : (
+            {/* "How much do you charge this customer?" — a regular's special price is the shop's own discount. */}
+            {!rewardOn && (
               <div className="flex flex-col gap-3 rounded-card border border-line p-3">
                 <Segmented
                   size="sm"
@@ -302,23 +309,21 @@ function CheckoutInner({ sessionId, onClose }: { sessionId: string; onClose: () 
                     setDiscountValue('');
                   }}
                   options={[
+                    { value: 'final', label: t('checkout.charge') },
                     { value: 'percent', label: t('checkout.percent') },
                     { value: 'amount', label: t('checkout.amount') },
                   ]}
                 />
-                <Input inputMode="decimal" className="num text-center" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} placeholder={discountKind === 'percent' ? '10' : f.money(0)} aria-label={t('checkout.discount')} />
-                <Input value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} placeholder={t('checkout.discountReason')} aria-label={t('checkout.discountReason')} />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setDiscountOn(false);
-                    setDiscountValue('');
-                    setDiscountReason('');
-                  }}
-                >
-                  {t('checkout.removeDiscount')}
-                </Button>
+                <Input
+                  inputMode="decimal"
+                  className="num text-center"
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  placeholder={discountKind === 'percent' ? '10' : discountKind === 'final' ? f.money(subtotal) : f.money(0)}
+                  aria-label={discountKind === 'final' ? t('checkout.charge') : t('checkout.discount')}
+                />
+                {discountKind === 'final' && <p className="text-xs text-muted">{discountValue && !discount ? t('checkout.chargeTooHigh') : t('checkout.chargeHint')}</p>}
+                {discount && <Input value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} placeholder={t('checkout.houseDiscount')} aria-label={t('checkout.discountReason')} />}
               </div>
             )}
 
