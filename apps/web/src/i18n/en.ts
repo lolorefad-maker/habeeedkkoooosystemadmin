@@ -65,6 +65,7 @@ export const en: Dict = {
     maintenance: 'Station is under maintenance', method: 'Payment method', rateNow: 'Rate now', noPrepaid: 'No payment', bookLater: 'Book for later', cancelBooking: 'Cancel booking',
   },
   session: {
+    addNumber: 'Add customer number',
     started: 'Started {time}', planned: 'Booked {d}', timeCharge: 'Time', items: 'Orders', paid: 'Prepaid', due: 'Due',
     refundDue: 'Refund to customer', pause: 'Pause', resume: 'Resume', changeMode: 'Switch to {mode}', transfer: 'Move to station',
     extend: 'Extend', toOpen: 'Switch to open time', toFixed: 'Set duration', drinks: 'Drinks & food', addToAccount: 'Add to account', endPay: 'End & pay',

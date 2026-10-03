@@ -1,7 +1,7 @@
 import { MINUTE } from '@lounge/core';
 import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import type { Q } from '../db';
-import { orderItems, orders, payments, reservations, sessions } from '../db/schema';
+import { customers, orderItems, orders, payments, reservations, sessions } from '../db/schema';
 import { carriedSoFar } from './carries';
 import { currentDay, getBranch, loadSegments } from './common';
 import { listControllers } from './controllers';
@@ -41,6 +41,10 @@ export async function floorSnapshot(q: Q, branchId: string, now: number) {
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
         .where(and(inArray(orders.sessionId, ids), eq(orders.status, 'open')))
     : [];
+
+  const custIds = [...new Set(live.map((s) => s.customerId).filter((x): x is string => !!x))];
+  const custRows = custIds.length ? await q.select({ id: customers.id, name: customers.name, phone: customers.phone }).from(customers).where(inArray(customers.id, custIds)) : [];
+  const custOf = new Map(custRows.map((c) => [c.id, c]));
 
   const resIds = live.map((s) => s.reservationId).filter((x): x is string => !!x);
   const paidRows = ids.length
@@ -116,6 +120,8 @@ export async function floorSnapshot(q: Q, branchId: string, now: number) {
         plannedMinutes: s.plannedMinutes,
         packageId: s.packageId,
         label: s.label,
+        /** The number registered for this session (it earns a free hour after a long session). */
+        customer: s.customerId && custOf.get(s.customerId)?.phone ? { id: s.customerId, name: custOf.get(s.customerId)!.name, phone: custOf.get(s.customerId)!.phone } : null,
         reservationId: s.reservationId,
         startedAt: s.startedAt.getTime(),
         endedAt: s.endedAt?.getTime() ?? null,

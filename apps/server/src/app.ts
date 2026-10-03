@@ -42,7 +42,7 @@ import {
   readyController,
   setControllerBroken,
 } from './services/controllers';
-import { addSessionPayment, reopenSession, sessionAction, sessionBill, setPlan, startSession, voidSession } from './services/sessions';
+import { addSessionPayment, reopenSession, sessionAction, sessionBill, setPlan, setSessionCustomer, startSession, voidSession } from './services/sessions';
 import {
   deleteProduct,
   deleteStation,
@@ -212,6 +212,7 @@ export async function buildApp(ctx: AppContext) {
   // ------------------------------------------------------------------ sessions
   app.post('/api/sessions', route('session.manage', async (req, actor) => startSession(ctx, actor, req.body)));
   app.post('/api/sessions/:id/action', route('session.manage', async (req, actor) => sessionAction(ctx, actor, id(req), req.body)));
+  app.post('/api/sessions/:id/customer', route('session.manage', async (req, actor) => setSessionCustomer(ctx, actor, id(req), req.body)));
   app.post('/api/sessions/:id/plan', route('session.manage', async (req, actor) => setPlan(ctx, actor, id(req), req.body)));
   app.post('/api/sessions/:id/reopen', route('session.manage', async (req, actor) => reopenSession(ctx, actor, id(req))));
   app.post('/api/sessions/:id/void', route('session.manage', async (req, actor) => voidSession(ctx, actor, id(req), req.body)));

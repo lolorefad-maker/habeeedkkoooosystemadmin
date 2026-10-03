@@ -245,6 +245,7 @@ export const ar = {
     cancelBooking: 'إلغاء الحجز',
   },
   session: {
+    addNumber: 'سجّل رقم الزبون',
     started: 'بدأت {time}',
     planned: 'المدة المحجوزة {d}',
     timeCharge: 'الوقت',

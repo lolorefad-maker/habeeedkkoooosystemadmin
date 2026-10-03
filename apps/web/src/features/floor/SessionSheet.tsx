@@ -9,6 +9,7 @@ import {
   CreditCard,
   Gamepad,
   Pause,
+  Phone,
   Play,
   Plus,
   Repeat,
@@ -30,12 +31,13 @@ import { can, useAuth } from '../../lib/auth';
 import { useNow } from '../../lib/clock';
 import { useFmt } from '../../lib/format';
 import type { StationView } from '../../lib/live';
-import { useProducts, useSessionBill } from '../../lib/queries';
+import { useBranch, useProducts, useSessionBill } from '../../lib/queries';
 import type { Floor } from '../../lib/types';
 import { TimeLines } from '../checkout/BillBreakdown';
 import { announceStock, CartLines, cartTotal, QuickProducts, useCart, type StockLeft } from '../cafe/products';
 import { ControllerActions, ControllerChip, stateOf } from '../controllers/parts';
 import { autoFocusField } from '../../lib/viewport';
+import { PhoneField } from '../rewards/PhoneField';
 
 export function SessionSheet({
   view,
@@ -61,6 +63,7 @@ export function SessionSheet({
   const [transferOpen, setTransferOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [numberOpen, setNumberOpen] = useState(false);
   const [ctrlId, setCtrlId] = useState<string | null>(null);
   const [addCtrlOpen, setAddCtrlOpen] = useState(false);
   const now = useNow();
@@ -189,6 +192,27 @@ export function SessionSheet({
                 </span>
               )}
             </div>
+            {/* The number can be given at any time while the device is open; over the reward hours it earns a free hour. */}
+            {manage && (
+              <button
+                type="button"
+                onClick={() => setNumberOpen(true)}
+                className={clsx(
+                  'mt-3 flex w-full items-center gap-2 rounded-control border px-3 py-2 text-start text-sm transition-colors',
+                  session.customer ? 'border-line hover:bg-surface-2' : 'border-dashed border-line-strong text-muted hover:bg-surface-2 hover:text-fg',
+                )}
+              >
+                <Phone className="size-4 shrink-0" aria-hidden />
+                {session.customer ? (
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <Num>+{session.customer.phone}</Num>
+                    <span className="text-xs text-muted">{t('customers.edit')}</span>
+                  </span>
+                ) : (
+                  <span>{t('session.addNumber')}</span>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Session account: play time × rate + cafeteria − what was paid (cash / visa) = what is left */}
@@ -324,6 +348,7 @@ export function SessionSheet({
       </Sheet>
 
       <TransferModal open={transferOpen} onOpenChange={setTransferOpen} floor={floor} sessionId={session.id} mode={mode} currentStationId={station.id} />
+      {numberOpen && <SessionNumberModal session={session} onClose={() => setNumberOpen(false)} />}
       <VoidSessionModal open={voidOpen} onOpenChange={setVoidOpen} sessionId={session.id} onDone={onClose} />
       <PaymentModal open={payOpen} onOpenChange={setPayOpen} sessionId={session.id} suggested={Math.max(0, due)} />
       {ctrl && <ControllerActions c={ctrl} floor={floor} onClose={() => setCtrlId(null)} />}
@@ -609,6 +634,47 @@ function VoidSessionModal({ open, onOpenChange, sessionId, onDone }: { open: boo
       <Field label={t('session.voidReason')} htmlFor="void-session-reason">
         <Input id="void-session-reason" autoFocus={autoFocusField()} value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
+    </Modal>
+  );
+}
+
+/** Gives (or corrects) the customer's number for a device that is already open. */
+function SessionNumberModal({ session, onClose }: { session: { id: string; label: string | null; customer: { phone: string } | null }; onClose: () => void }) {
+  const { t } = useT();
+  const f = useFmt();
+  const branch = useBranch();
+  const { busy, run } = useAction();
+  const [phone, setPhone] = useState(session.customer ? `+${session.customer.phone}` : '');
+  const [name, setName] = useState(session.label ?? '');
+  const policy = branch?.settings.rewards;
+  const save = async () => {
+    const ok = await run(() => post(`/api/sessions/${session.id}/customer`, { phone: phone.trim(), name: name.trim() || null }), { success: t('customers.saved') });
+    if (ok) onClose();
+  };
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t('session.addNumber')}
+      size="sm"
+      footer={
+        <Button variant="primary" size="lg" block loading={busy} disabled={phone.replace(/\D/g, '').length < 7} onClick={save}>
+          {t('customers.save')}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <PhoneField
+          id="session-phone"
+          value={phone}
+          onChange={setPhone}
+          autoFocus={autoFocusField()}
+          hint={policy?.enabled ? t('rewards.startHint', { after: f.span(policy.afterMinutes * 60_000), free: f.span(policy.freeMinutes * 60_000) }) : undefined}
+        />
+        <Field label={t('customers.name')} htmlFor="session-name">
+          <Input id="session-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
+        </Field>
+      </div>
     </Modal>
   );
 }
