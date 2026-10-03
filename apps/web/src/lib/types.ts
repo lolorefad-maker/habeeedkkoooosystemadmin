@@ -22,6 +22,8 @@ export interface FloorSession {
   plannedMinutes: number | null;
   packageId: string | null;
   label: string | null;
+  /** The number registered for this session, if any. */
+  customer: { id: string; name: string; phone: string } | null;
   reservationId: string | null;
   startedAt: number;
   endedAt: number | null;

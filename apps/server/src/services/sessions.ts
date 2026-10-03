@@ -386,3 +386,29 @@ export async function sessionBill(q: Q, branch: Branch, s: SessionRow, now: numb
   });
   return { session: s, timeline, time, items, paid, paidByMethod, totals };
 }
+
+export const sessionCustomerInput = z.object({
+  phone: z.string().trim().min(1).max(30),
+  name: z.string().trim().max(80).nullish(),
+});
+
+/**
+ * The customer's number given after the device was opened (or fixed): it is saved in the customers'
+ * numbers, and a session that goes past the reward hours earns its free hour at checkout.
+ */
+export async function setSessionCustomer(ctx: AppContext, actor: Actor, id: string, raw: unknown) {
+  const input = sessionCustomerInput.parse(raw);
+  return mutate(ctx, actor, async (tx, record) => {
+    const s = await getSession(tx, actor.branchId, id);
+    if (s.status !== 'running' && s.status !== 'ended') throw new DomainError('session_closed', 'Session is already closed');
+    const branch = await getBranch(tx, actor.branchId);
+    const c = await customerForPhone(tx, branch, { phone: input.phone, name: input.name || s.label, strict: true });
+    if (!c) throw new DomainError('invalid_phone', 'This phone number is not valid');
+    await tx
+      .update(sessions)
+      .set({ customerId: c.id, label: s.label || input.name || null, updatedAt: new Date(ctx.clock.now()) })
+      .where(eq(sessions.id, id));
+    await record({ type: 'session.customer_set', entity: 'session', entityId: id, payload: { customerId: c.id } });
+    return c;
+  });
+}
