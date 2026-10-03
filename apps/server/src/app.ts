@@ -28,6 +28,7 @@ import { closeDay, dayReport, listDays } from './services/days';
 import { floorSnapshot } from './services/floor';
 import { monthReport, rangeReport, sessionsLog } from './services/ledger';
 import { exportSetup, importSetup } from './services/setup';
+import { createCustomer, listCustomers, updateCustomer } from './services/customers';
 import { billCustomer, listRewards, lookupCustomer, markRewardNotified, voidReward } from './services/rewards';
 import { adjustStock, listMovements, listStock, receiveStock } from './services/stock';
 import { createOrder, voidOrderItem } from './services/orders';
@@ -321,6 +322,10 @@ export async function buildApp(ctx: AppContext) {
     '/api/customers/lookup',
     route('session.manage', async (req, actor) => lookupCustomer(ctx.db, actor.branchId, (req.query as { phone?: string }).phone)),
   );
+
+  app.get('/api/customers', route('checkout', async (_req, actor) => listCustomers(ctx.db, actor.orgId, actor.branchId)));
+  app.post('/api/customers', route('checkout', async (req, actor) => createCustomer(ctx, actor, req.body)));
+  app.patch('/api/customers/:id', route('checkout', async (req, actor) => updateCustomer(ctx, actor, id(req), req.body)));
 
   // ------------------------------------------------------------------ goods (stock)
   app.get('/api/stock', route('stock.view', async (_req, actor) => listStock(ctx.db, actor.branchId)));

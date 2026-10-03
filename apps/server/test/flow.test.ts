@@ -157,7 +157,8 @@ describe('a full evening', () => {
     expect(out.status).toBe(200);
   });
 
-  it('a big discount needs a manager PIN', async () => {
+  it('once the owner sets a discount limit, a bigger discount needs a manager PIN', async () => {
+    expect((await api('PATCH', '/api/settings/branch', { settings: { checkout: { maxCashierDiscountPercent: 10 } } }, tokens.owner)).status).toBe(200);
     const s = await api('POST', '/api/sessions', { stationId: station('PS-03').id, mode: 'single', kind: 'open' }, tokens.cashier);
     advance(60);
     const body = { discount: { kind: 'percent', value: 50 }, discountReason: 'regular customer', payments: [{ method: 'cash', amount: 1000 }] };
@@ -165,6 +166,7 @@ describe('a full evening', () => {
     expect(denied.json.code).toBe('approval_required');
     const approved = await api('POST', `/api/sessions/${s.json.id}/checkout`, { ...body, approvalPin: pinOf('manager') }, tokens.cashier);
     expect(approved.status).toBe(200);
+    await api('PATCH', '/api/settings/branch', { settings: { checkout: { maxCashierDiscountPercent: 100 } } }, tokens.owner);
   });
 
   it('transfer to a VIP room and pause/resume', async () => {
