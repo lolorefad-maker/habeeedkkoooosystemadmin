@@ -13,7 +13,7 @@ import { sessionBill, useBillingContext } from '../../lib/live';
 import { useFloor, useSessionsLog } from '../../lib/queries';
 import type { LedgerRow } from '../../lib/types';
 
-interface Row extends LedgerRow {
+export interface Row extends LedgerRow {
   open: boolean;
   /** Ended but not paid yet (open = still playing or waiting for payment). */
   unpaid: boolean;
@@ -31,10 +31,10 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
   const now = useNow();
   const ctx = useBillingContext(floor.data);
   const [deleting, setDeleting] = useState<Row | null>(null);
-  // Any day, open or closed. A carried share belongs to its session's bill, so it has no button of its own.
-  const canDelete = (r: Row) => !r.carried;
+  // Any day, open or closed, but only an entry that was paid: a device still playing is never touched from here.
+  const canDelete = (r: Row) => !r.carried && !r.open;
 
-  const rows: Row[] = useMemo(() => {
+  const allRows: Row[] = useMemo(() => {
     // Every row shows this day's share: a bill whose session ran past an earlier day's end leaves
     // out what that day already counted, so the column totals equal the day's income.
     const paid = (log.data ?? []).map((r) => {
@@ -75,6 +75,8 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
     });
     return [...paid, ...open.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0))];
   }, [log.data, isOpenDay, floor.data, ctx, now]);
+  // Devices here; the cafeteria's sales have their own list below.
+  const rows = useMemo(() => allRows.filter((r) => !r.counter), [allRows]);
 
   const totals = rows.reduce(
     (a, r) => ({ time: a.time + r.timeCharge, items: a.items + r.itemsTotal, total: a.total + r.total, played: a.played + r.playedMs }),
@@ -223,7 +225,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
   );
 }
 
-function DeleteRowButton({ onClick }: { onClick: () => void }) {
+export function DeleteRowButton({ onClick }: { onClick: () => void }) {
   const { t } = useT();
   return (
     <Button size="sm" variant="ghost" className="text-danger" icon={<Trash2 className="size-4" />} onClick={onClick}>
@@ -236,7 +238,7 @@ function DeleteRowButton({ onClick }: { onClick: () => void }) {
  * Asks before anything disappears. A paid entry is voided as a bill (its money is given back in
  * the same shift); a device still open or waiting for payment is cancelled as a session.
  */
-function DeleteRowModal({ row, onClose }: { row: Row; onClose: () => void }) {
+export function DeleteRowModal({ row, onClose }: { row: Row; onClose: () => void }) {
   const { t } = useT();
   const f = useFmt();
   const { busy, run } = useAction();
@@ -245,7 +247,7 @@ function DeleteRowModal({ row, onClose }: { row: Row; onClose: () => void }) {
   const confirm = async () => {
     const why = reason.trim() || t('ledger.deleteDefaultReason');
     const ok = await run(
-      (pin) => (row.open ? post(`/api/sessions/${row.billId}/void`, { reason: why, approvalPin: pin }) : post(`/api/bills/${row.billId}/void`, { reason: why, approvalPin: pin })),
+      (pin) => post(`/api/bills/${row.billId}/void`, { reason: why, approvalPin: pin }),
       { what: name, success: t('common.deleted') },
     );
     if (ok) onClose();
@@ -278,7 +280,7 @@ function DeleteRowModal({ row, onClose }: { row: Row; onClose: () => void }) {
           </div>
           <div className="mt-0.5 text-xs text-muted tabular-nums">{row.startedAt ? f.time(row.startedAt) : '—'} – {row.endedAt ? f.time(row.endedAt) : '…'}</div>
         </div>
-        <p className="text-sm leading-relaxed text-muted">{row.open ? t('ledger.deleteBodyOpen') : t('ledger.deleteBody')}</p>
+        <p className="text-sm leading-relaxed text-muted">{t('ledger.deleteBody')}</p>
         <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('ledger.deleteReason')} aria-label={t('ledger.deleteReason')} maxLength={200} />
       </div>
     </Modal>
@@ -345,7 +347,7 @@ function SplitNote({ r }: { r: Row }) {
   );
 }
 
-function PaidChips({ paid }: { paid: Record<string, number> }) {
+export function PaidChips({ paid }: { paid: Record<string, number> }) {
   const { t } = useT();
   const entries = Object.entries(paid).filter(([, v]) => v !== 0);
   if (entries.length === 0) return <span className="text-faint">—</span>;
@@ -358,5 +360,42 @@ function PaidChips({ paid }: { paid: Record<string, number> }) {
         </span>
       ))}
     </span>
+  );
+}
+
+/** What was bought at the cafeteria counter (no device): one line per sale, with what was taken and how it was paid. */
+export function CafeLog({ day }: { day: string }) {
+  const { t } = useT();
+  const f = useFmt();
+  const log = useSessionsLog(day);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  const sales = (log.data ?? []).filter((r) => r.counter);
+  const total = sales.reduce((a, r) => a + r.total, 0);
+  if (log.isLoading || sales.length === 0) return null;
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-5 pt-5">
+        <SectionTitle>{t('ledger.cafeLog')}</SectionTitle>
+        <Money value={total} className="mb-3 font-semibold" />
+      </div>
+      <ul className="flex flex-col divide-y divide-line border-t border-line">
+        {sales.map((r) => (
+          <li key={r.billId} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3">
+            <div className="min-w-0 flex-1 basis-56">
+              <div className="flex flex-wrap items-center gap-x-2 text-sm">
+                <Coffee className="size-4 text-muted" aria-hidden />
+                <span className="tabular-nums text-muted">{r.startedAt ? f.time(r.startedAt) : '—'}</span>
+                {r.label && <span className="font-medium">{r.label}</span>}
+              </div>
+              <div className="mt-0.5 text-xs text-muted">{r.items.map((i) => `${i.qty}× ${i.name}`).join('، ')}</div>
+            </div>
+            <PaidChips paid={r.paidByMethod} />
+            <Money value={r.total} className="font-semibold" />
+            <DeleteRowButton onClick={() => setDeleting({ ...r, open: false, unpaid: false })} />
+          </li>
+        ))}
+      </ul>
+      {deleting && <DeleteRowModal row={deleting} onClose={() => setDeleting(null)} />}
+    </Card>
   );
 }

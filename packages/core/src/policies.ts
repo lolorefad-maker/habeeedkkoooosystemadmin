@@ -57,7 +57,7 @@ export const dayPolicySchema = z.object({
   /** Local time the business day rolls over (a lounge open until 03:00 uses e.g. 06:00). */
   cutoff: hhmm.default('06:00'),
   /** Generate the end-of-day report automatically at the cutoff. */
-  autoCloseDay: z.boolean().default(true),
+  autoCloseDay: z.boolean().default(false),
 });
 
 export const controllerPolicySchema = z.object({

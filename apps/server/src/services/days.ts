@@ -9,8 +9,8 @@ import {
 import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
-import { mutate, type AppContext } from '../context';
-import type { Q } from '../db';
+import { mutate, type AppContext, type Record_ } from '../context';
+import type { Q, Tx } from '../db';
 import {
   bills,
   businessDays,
@@ -31,7 +31,7 @@ import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { currentDay, getBranch, loadBillingContext, loadSegments, openShift, toTimeline, type Branch } from './common';
 import { AFTER_DAY_END, carriedSoFar, carriesOnDays, carryOpenSessions } from './carries';
-import { closeOpenShift, closeShiftInput, rollShiftAtDayEnd } from './shifts';
+import { closeOpenShift, closeShiftInput, endShift, rollShiftAtDayEnd, shiftSummary } from './shifts';
 
 export const closeDayInput = z.object({
   counts: z
@@ -277,12 +277,14 @@ async function shiftsOfDay(q: Q, dayShifts: (typeof shifts.$inferSelect)[]): Pro
 
 const nextDay = (day: string) => DateTime.fromISO(day).plus({ days: 1 }).toISODate()!;
 
-async function closeAndRoll(
-  ctx: AppContext,
-  actor: Actor | { id: null; branchId: string },
-  opts: { auto: boolean; counts: { productId: string; countedQty: number }[]; shift?: { countedCash: number; note?: string | null } | null },
-) {
-  return mutate(ctx, actor, async (tx, record) => {
+type CloseOpts = { auto: boolean; counts: { productId: string; countedQty: number }[]; shift?: { countedCash: number; note?: string | null } | null };
+
+async function closeAndRoll(ctx: AppContext, actor: Actor | { id: null; branchId: string }, opts: CloseOpts) {
+  return mutate(ctx, actor, (tx, record) => closeDayTx(tx, record, ctx, actor, opts));
+}
+
+async function closeDayTx(tx: Tx, record: Record_, ctx: AppContext, actor: Actor | { id: null; branchId: string }, opts: CloseOpts) {
+  {
     const now = ctx.clock.now();
     const branch = await getBranch(tx, actor.branchId);
     const day = await currentDay(tx, branch, now);
@@ -309,7 +311,9 @@ async function closeAndRoll(
     // Sessions still open: what they earned by the day's end is this day's income. At the automatic
     // close that is the cutoff itself (midnight), even if the server only notices a bit later.
     const asOf = opts.auto ? Math.min(now, businessDayRange(day, branch.timezone, branch.settings.day.cutoff).end) : now;
-    await carryOpenSessions(tx, branch, day, asOf);
+    // The day is the shift: a device still playing is not split, it is counted on the day it is paid.
+    // (Only the old midnight mode splits a session between two days.)
+    if (branch.settings.day.autoCloseDay) await carryOpenSessions(tx, branch, day, asOf);
 
     const clockDay = businessDayOf(now, branch.timezone, branch.settings.day.cutoff);
     const next = clockDay > day ? clockDay : nextDay(day);
@@ -340,6 +344,53 @@ async function closeAndRoll(
       payload: { day, next, auto: opts.auto, total: report.revenue.total, net: report.payments.net, shiftRolled: !!rolled },
     });
     return { day, next, report };
+  }
+}
+
+/**
+ * Closing the shift by hand ends the day with it — even after midnight, so a night that runs from
+ * 4 pm to 6 am is one day. In the old midnight mode a shift closes on its own.
+ */
+export async function endShiftAndDay(ctx: AppContext, actor: Actor, raw: unknown) {
+  const input = closeShiftInput.parse(raw);
+  const branch = await getBranch(ctx.db, actor.branchId);
+  if (branch.settings.day.autoCloseDay) return endShift(ctx, actor, raw);
+  return mutate(ctx, actor, async (tx, record) => {
+    const shift = await closeOpenShift(tx, record, actor, input, ctx.clock.now());
+    const closed = await closeDayTx(tx, record, ctx, actor, { auto: false, counts: [], shift: null });
+    return { ...shift, day: closed.day, next: closed.next };
+  });
+}
+
+/**
+ * "Start from now" (owner): the current shift and day are closed without a count, every day so far
+ * is hidden from the ledger (the rows stay in the database), and a fresh day opens. Devices that
+ * are playing are not touched; they are paid on the new day.
+ */
+export async function resetLedger(ctx: AppContext, actor: Actor, raw: unknown) {
+  z.object({ confirm: z.literal(true) }).parse(raw ?? {});
+  if (actor.role !== 'owner') throw new DomainError('owner_only', 'Only the owner can start the ledger from zero');
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = ctx.clock.now();
+    const branch = await getBranch(tx, actor.branchId);
+    const day = await currentDay(tx, branch, now);
+    const s = await openShift(tx, branch.id);
+    if (s) {
+      const summary = (await shiftSummary(tx, s.id))!;
+      await tx
+        .update(shifts)
+        .set({ status: 'closed', closedAt: new Date(now), closedBy: actor.id, expectedCash: summary.expectedCash, countedCash: null, variance: null })
+        .where(and(eq(shifts.id, s.id), eq(shifts.status, 'open')));
+    }
+    await tx
+      .update(businessDays)
+      .set({ status: 'closed', closedAt: new Date(now), closedBy: actor.id, archived: true })
+      .where(eq(businessDays.branchId, branch.id));
+    const clockDay = businessDayOf(now, branch.timezone, branch.settings.day.cutoff);
+    const next = clockDay > day ? clockDay : nextDay(day);
+    await tx.insert(businessDays).values({ id: newId(), branchId: branch.id, day: next, status: 'open', openedAt: new Date(now) });
+    await record({ type: 'ledger.reset', entity: 'day', payload: { throughDay: day, next, shiftClosed: !!s } });
+    return { throughDay: day, next };
   });
 }
 
@@ -375,7 +426,7 @@ export async function dayReport(q: Q, branchId: string, day: string | null, now:
   const branch = await getBranch(q, branchId);
   const target = day ?? (await currentDay(q, branch, now));
   const row = await getDayRow(q, branchId, target);
-  if (!row) throw notFound('business day');
+  if (!row || row.archived) throw notFound('business day');
   if (row.status === 'closed' && row.report) {
     // The saved report is the day as it closed; its drawers and money stay live: a drawer counted
     // later, and the late payment of a session that was playing when it ended.
@@ -393,6 +444,6 @@ export async function listDays(q: Q, branchId: string) {
   return q
     .select({ day: businessDays.day, status: businessDays.status, openedAt: businessDays.openedAt, closedAt: businessDays.closedAt, auto: businessDays.auto })
     .from(businessDays)
-    .where(eq(businessDays.branchId, branchId))
+    .where(and(eq(businessDays.branchId, branchId), eq(businessDays.archived, false)))
     .orderBy(businessDays.day);
 }

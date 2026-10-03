@@ -6,6 +6,15 @@ import { bills, businessDays, payments, sessions, stations } from '../db/schema'
 import { getBranch } from './common';
 import { carriedSoFar, carriesOnDays } from './carries';
 
+/** Days that "start from now" hid from the ledger. */
+export async function archivedDays(q: Q, branchId: string): Promise<Set<string>> {
+  const rows = await q.select({ day: businessDays.day }).from(businessDays).where(and(eq(businessDays.branchId, branchId), eq(businessDays.archived, true)));
+  return new Set(rows.map((r) => r.day));
+}
+async function isArchived(q: Q, branchId: string, day: string) {
+  return (await archivedDays(q, branchId)).has(day);
+}
+
 /** Money received per method, from the payments table (prepaid, during play, at checkout, deposits, refunds). */
 function byMethod(rows: { method: string; amount: number }[]) {
   const out: Record<string, number> = {};
@@ -20,6 +29,7 @@ function byMethod(rows: { method: string; amount: number }[]) {
  * a session still open at this day's end shows as a `carried` row with this day's share.
  */
 export async function sessionsLog(q: Q, branchId: string, day: string) {
+  if (await isArchived(q, branchId, day)) return [];
   const rows = await q
     .select()
     .from(bills)
@@ -220,7 +230,8 @@ export async function rangeReport(q: Q, branchId: string, from: string, to: stri
     r.total += c.time + c.items;
   }
 
-  const list = [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+  const hidden = await archivedDays(q, branchId);
+  const list = [...days.values()].filter((r) => !hidden.has(r.day)).sort((a, b) => a.day.localeCompare(b.day));
   const totals = list.reduce(
     (t, r) => {
       t.sessions += r.sessions;

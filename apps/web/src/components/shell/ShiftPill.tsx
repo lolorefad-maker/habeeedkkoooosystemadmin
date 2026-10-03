@@ -52,6 +52,8 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   const [note, setNote] = useState('');
   const { busy, run } = useAction();
   const minor = parseMoney(amount || '0', f.decimals);
+  // Devices still playing when the shift is closed are paid on the next day, whole.
+  const running = (floor.data?.sessions ?? []).filter((s) => s.status === 'running').length;
 
   const submitOpen = async () => {
     if (minor == null) return;
@@ -90,6 +92,12 @@ function ShiftDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
         {(floor.data?.uncountedShifts ?? []).map((s) => (
           <CountOldShift key={s.id} s={s} />
         ))}
+        {shift && (
+          <div data-status="ending" className="tint rounded-card border p-3 text-sm">
+            <div className="font-semibold">{t('shift.endsDay')}</div>
+            {running > 0 && <div className="mt-1 text-xs text-muted">{t('shift.runningWarn', { n: running })}</div>}
+          </div>
+        )}
         {shift && (
           <div className="rounded-card bg-surface-2 p-4">
             <div className="mb-2 text-xs font-medium text-faint">{t('shift.byMethod')}</div>

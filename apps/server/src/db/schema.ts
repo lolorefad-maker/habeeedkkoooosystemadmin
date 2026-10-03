@@ -466,6 +466,8 @@ export const businessDays = pgTable(
     closedAt: ts('closed_at'),
     closedBy: uuid('closed_by'),
     auto: boolean('auto').notNull().default(false),
+    /** Hidden from the ledger by "start from now" (the rows stay). */
+    archived: boolean('archived').notNull().default(false),
     report: jsonb('report').$type<Record<string, unknown> | null>(),
   },
   (t) => [uniqueIndex('business_days_branch_day_uq').on(t.branchId, t.day)],

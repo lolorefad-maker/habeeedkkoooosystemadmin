@@ -7,23 +7,25 @@ import {
   CalendarRange,
   CalendarSearch,
   ChevronDown,
-  Coffee,
   CreditCard,
-  Gamepad2,
   Lock,
   Printer,
   Receipt,
+  RotateCcw,
+  Wallet,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { TypeIcon } from '../../components/station/status';
 import { Button } from '../../components/ui/button';
-import { Card, Money, Num, Row, SectionTitle, Skeleton } from '../../components/ui/primitives';
+import { useAction } from '../../components/ui/feedback';
+import { post } from '../../lib/api';
+import { Card, Input, Money, Num, Row, SectionTitle, Skeleton } from '../../components/ui/primitives';
 import { useT, type TKey } from '../../i18n';
 import { can, useAuth } from '../../lib/auth';
 import { useFmt } from '../../lib/format';
-import { useDayReport, useDays } from '../../lib/queries';
-import { DailyLog } from './DailyLog';
+import { useDayReport, useDays, useFloor, useSessionsLog } from '../../lib/queries';
+import { CafeLog, DailyLog } from './DailyLog';
 import { CountOldShift } from '../../components/shell/ShiftPill';
 import { Modal } from '../../components/ui/overlays';
 import { EndDayDialog } from './EndDay';
@@ -41,6 +43,7 @@ const TABS: { id: Tab; label: TKey; icon: typeof Receipt }[] = [
 /** The ledger ("الجرد"): daily device log + Z report, monthly totals per day, and goods stock. */
 export function ReportsPage() {
   const { t } = useT();
+  const role = useAuth((s) => s.user?.role);
   const [params, setParams] = useSearchParams();
   // Goods moved to their own page ("المخزون"); old links still land there.
   if (params.get('tab') === 'goods') return <Navigate to="/stock" replace />;
@@ -73,6 +76,7 @@ export function ReportsPage() {
         ))}
       </div>
 
+      {role === 'owner' && tab === 'daily' && <ResetLedger />}
       {tab === 'daily' && (
         <DailyTab
           day={day}
@@ -183,6 +187,7 @@ function DailyTab({
         <>
           <DaySummary r={r} />
           <DailyLog day={r.day} isOpenDay={r.status === 'open'} />
+          <CafeLog day={r.day} />
           <ReportView r={r} />
         </>
       )}
@@ -203,20 +208,25 @@ function DailyTab({
   );
 }
 
-/** What the owner asks first: how much came in, and how (cash / visa). */
+/**
+ * What the owner asks first, in one look: when the shift was opened and with how much, what came in
+ * (cash and visa), how many devices played and what the day earned so far.
+ */
 function DaySummary({ r }: { r: DayReport }) {
   const { t } = useT();
   const f = useFmt();
-  const carriedIn = r.revenue.carriedIn ?? 0;
-  const carriedOut = r.revenue.carriedOut ?? 0;
+  const log = useSessionsLog(r.day);
+  const floor = useFloor();
+  const devices = (log.data ?? []).filter((x) => !x.counter && !x.carried).length + (r.status === 'open' ? r.openSessions.count : 0);
+  const live = r.status === 'open' ? floor.data?.shift : null;
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr] lg:gap-4">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1.2fr] lg:gap-4">
       <Card className="relative overflow-hidden p-5">
         <span aria-hidden className="absolute inset-y-0 start-0 w-1 bg-accent" />
-        <div className="text-sm text-muted">{t('ledger.dayIncome')}</div>
+        <div className="text-sm text-muted">{t('ledger.dayProfit')}</div>
         <Money value={r.revenue.total} currency className="mt-2 text-4xl font-semibold tracking-tight" />
         <div className="mt-1.5 text-xs text-faint">
-          <Num>{r.revenue.bills}</Num> {t('reports.bills')}
+          {t('ledger.devicesPlayed', { n: devices })} · <Num>{r.revenue.bills}</Num> {t('reports.bills')}
           {r.revenue.discounts > 0 && (
             <>
               {' · '}
@@ -224,37 +234,38 @@ function DaySummary({ r }: { r: DayReport }) {
             </>
           )}
         </div>
-        {/* A station that was playing when a day ended is split across the two days. */}
-        {(carriedIn !== 0 || carriedOut !== 0 || (r.payments.late ?? 0) > 0 || (r.status === 'open' && r.openSessions.runningValue > 0)) && (
-          <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted">
-            {carriedIn !== 0 && <li>{t('reports.carriedIn', { amount: f.money(carriedIn) })}</li>}
-            {carriedOut !== 0 && <li>{t('reports.carriedOut', { amount: f.money(carriedOut) })}</li>}
-            {(r.payments.late ?? 0) > 0 && <li>{t('reports.latePayments', { amount: f.money(r.payments.late ?? 0) })}</li>}
-            {r.status === 'open' && r.openSessions.runningValue > 0 && (
-              <li className="text-st-reserved">{t('reports.runningNow', { amount: f.money(r.openSessions.runningValue) })}</li>
-            )}
-          </ul>
+        {r.status === 'open' && r.openSessions.runningValue > 0 && (
+          <div className="mt-2 text-xs text-st-reserved">{t('reports.runningNow', { amount: f.money(r.openSessions.runningValue) })}</div>
         )}
       </Card>
-      <SummaryTile icon={<Banknote />} label={t('checkout.cash')} value={r.payments.byMethod.cash ?? 0} />
-      <SummaryTile icon={<CreditCard />} label={t('checkout.card')} value={r.payments.byMethod.card ?? 0} />
       <Card className="flex flex-col justify-center gap-2 p-5">
-        <Row className="!py-0" label={<span className="flex items-center gap-2"><Gamepad2 className="size-4" />{t('reports.time')}</span>} value={<Money value={r.revenue.time} className="font-semibold text-fg" />} />
-        <Row className="!py-0" label={<span className="flex items-center gap-2"><Coffee className="size-4" />{t('ledger.drinks')}</span>} value={<Money value={r.revenue.items} className="font-semibold text-fg" />} />
+        <div className="text-sm text-muted">{t('ledger.increase')}</div>
+        <Money value={r.payments.net} currency className="text-3xl font-semibold" />
+        <Row className="!py-0" label={<span className="flex items-center gap-2"><Banknote className="size-4" />{t('checkout.cash')}</span>} value={<Money value={r.payments.byMethod.cash ?? 0} className="font-semibold text-fg" />} />
+        <Row className="!py-0" label={<span className="flex items-center gap-2"><CreditCard className="size-4" />{t('checkout.card')}</span>} value={<Money value={r.payments.byMethod.card ?? 0} className="font-semibold text-fg" />} />
+      </Card>
+      <Card className="flex flex-col justify-center gap-2 p-5">
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <Wallet className="size-4" />
+          {t('shift.title')}
+        </div>
+        {r.shifts.length === 0 ? (
+          <p className="text-sm text-faint">{t('ledger.noShift')}</p>
+        ) : (
+          r.shifts.map((s) => (
+            <div key={s.id} className="flex flex-col gap-1 border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+              <Row className="!py-0" label={t('ledger.shiftOpenedAt')} value={<span className="font-semibold tabular-nums">{f.dateTime(s.openedAt)}</span>} />
+              <Row className="!py-0" label={t('ledger.shiftFloat')} value={<Money value={s.openingFloat} className="font-semibold text-fg" />} />
+              {s.closedAt ? (
+                <Row className="!py-0" label={t('ledger.shiftClosedAt')} value={<span className="tabular-nums">{f.dateTime(s.closedAt)}</span>} />
+              ) : (
+                <Row className="!py-0" label={t('shift.expected')} value={<Money value={live?.expectedCash ?? 0} className="font-semibold text-fg" />} />
+              )}
+            </div>
+          ))
+        )}
       </Card>
     </div>
-  );
-}
-
-function SummaryTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-  return (
-    <Card className="p-5">
-      <div className="flex items-center gap-2 text-sm text-muted [&_svg]:size-4">
-        {icon}
-        {label}
-      </div>
-      <Money value={value} className="mt-2 text-2xl font-semibold" />
-    </Card>
   );
 }
 
@@ -424,6 +435,49 @@ function ReportView({ r }: { r: DayReport }) {
       <p className="text-center text-xs text-faint">
         {tk('status', r.status === 'open' ? 'active' : 'ended')} · {f.dateTime(r.generatedAt)}
       </p>
+    </div>
+  );
+}
+
+/** Owner only: start the ledger from zero. Everything so far is hidden (not deleted); the devices are untouched. */
+function ResetLedger() {
+  const { t } = useT();
+  const { busy, run } = useAction();
+  const [asking, setAsking] = useState(false);
+  const [word, setWord] = useState('');
+  const confirm = async () => {
+    const ok = await run(() => post('/api/ledger/reset', { confirm: true }), { success: t('ledger.resetDone') });
+    if (ok) {
+      setAsking(false);
+      setWord('');
+    }
+  };
+  return (
+    <div className="no-print">
+      <Button variant="ghost" size="sm" className="text-danger" icon={<RotateCcw className="size-4" />} onClick={() => setAsking(true)}>
+        {t('ledger.reset')}
+      </Button>
+      <Modal
+        open={asking}
+        onOpenChange={setAsking}
+        title={t('ledger.resetTitle')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" size="lg" onClick={() => setAsking(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" size="lg" loading={busy} disabled={word.trim() !== t('ledger.resetWord')} onClick={confirm}>
+              {t('ledger.reset')}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm leading-relaxed text-muted">{t('ledger.resetBody')}</p>
+          <Input value={word} onChange={(e) => setWord(e.target.value)} placeholder={t('ledger.resetType', { word: t('ledger.resetWord') })} aria-label={t('ledger.resetType', { word: t('ledger.resetWord') })} />
+        </div>
+      </Modal>
     </div>
   );
 }

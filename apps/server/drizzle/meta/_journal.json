@@ -57,6 +57,20 @@
       "when": 1790995987947,
       "tag": "0007_cashier_discount_free",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791038056892,
+      "tag": "0008_day_archived",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791038057681,
+      "tag": "0009_day_is_the_shift",
+      "breakpoints": true
     }
   ]
 }

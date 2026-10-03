@@ -413,9 +413,6 @@ function PoliciesTab({ data }: { data: SettingsBundle }) {
             <Input id="d-cut" type="time" className="num" value={s.day.cutoff} onChange={(e) => e.target.value && set('day', { cutoff: e.target.value })} />
           </Field>
         </div>
-        <div className="mt-4 border-t border-line pt-4">
-          <Switch checked={s.day.autoCloseDay} onChange={(v) => set('day', { autoCloseDay: v })} label={t('settings.policy.autoCloseDay')} />
-        </div>
       </Card>
 
       <Card className="p-5">
