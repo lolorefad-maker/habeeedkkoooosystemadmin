@@ -2,8 +2,12 @@ import type { Dict } from './ar';
 
 export const en: Dict = {
   app: { name: 'Habeedko', tagline: 'Gaming lounge' },
-  nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Bookings', stock: 'Stock', reports: 'Ledger', settings: 'Settings', rewards: 'Rewards', customers: 'Customer numbers' },
+  nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Bookings', stock: 'Stock', reports: 'Ledger', settings: 'Settings', rewards: 'Rewards', customers: 'Customer numbers', customersShort: 'Numbers' },
   ledger: {
+    deleteTitle: 'Confirm delete', deleteConfirm: 'Confirm delete',
+    deleteBody: 'It leaves the day’s income and the ledger (even on a closed day), and its money is taken out of the shift. The audit log keeps who deleted it and why.',
+    deleteBodyOpen: 'The device is still open or unpaid: it will be cancelled. One with orders or payments cannot be deleted.',
+    deleteReason: 'Reason (optional)', deleteDefaultReason: 'Deleted from the ledger',
     daily: 'Daily', monthly: 'Monthly', range: 'Period', from: 'From', to: 'To', rangeTotal: 'Income for the period', daysWithIncome: 'days with income',
     last7: 'Last 7 days', lastMonth: 'Last month', thisYear: 'This year', rangeInvalid: 'The start day must come before the end day',
     rangeTooLong: 'Pick a period of at most a year', noRange: 'No income in this period', goods: 'Goods', sessionsLog: 'Device log', device: 'Device', fromTo: 'From – to',
@@ -261,7 +265,7 @@ export const en: Dict = {
     'session.started': 'Session started', 'session.paused': 'Paused', 'session.resumed': 'Resumed', 'session.ended': 'Session ended',
     'session.mode_changed': 'Mode changed', 'session.transferred': 'Moved', 'session.plan_changed': 'Duration changed',
     'session.reopened': 'Session reopened', 'session.voided': 'Session voided', 'order.created': 'New order',
-    'order.item_voided': 'Item voided', 'bill.paid': 'Bill paid',
+    'order.item_voided': 'Item voided', 'bill.paid': 'Bill paid', 'bill.voided': 'Bill deleted',
     'reservation.created': 'Reservation created', 'reservation.cancelled': 'Reservation cancelled', 'reservation.no_show': 'No-show',
     'reservation.checked_in': 'Checked in', 'reservation.refunded': 'Deposit refunded', 'shift.opened': 'Shift opened',
     'shift.closed': 'Shift closed', 'day.closed': 'Day ended', 'setup.imported': 'Setup imported', 'station.deleted': 'Station deleted', 'product.deleted': 'Product deleted', 'controller.deleted': 'Controller deleted', 'reservation.deleted': 'Booking deleted', 'settings.updated': 'Settings changed', 'station.created': 'Station added',

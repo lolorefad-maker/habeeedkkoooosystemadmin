@@ -11,7 +11,7 @@ import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext, type Record_ } from '../context';
 import type { Q, Tx } from '../db';
-import { bills, branches, dayCarries, orderItems, orders, payments, reservations, segments, sessions, shifts, stations, users } from '../db/schema';
+import { bills, branches, businessDays, dayCarries, orderItems, orders, payments, reservations, segments, sessions, shifts, stations, users } from '../db/schema';
 import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -28,8 +28,9 @@ import {
   toTimeline,
   type Branch,
 } from './common';
-import { AFTER_DAY_END, carriedSoFar } from './carries';
+import { AFTER_DAY_END, carriedSoFar, reverseCarries } from './carries';
 import { returnStationControllers } from './controllers';
+import { buildDayReport } from './days';
 import { insertOrder, orderItemsInput } from './orders';
 import { customerForPhone, earnReward, rewardDiscount, useReward } from './rewards';
 import { sessionItems } from './sessions';
@@ -409,4 +410,76 @@ export async function getBill(q: Q, branchId: string, id: string) {
   const [b] = await q.select().from(bills).where(and(eq(bills.id, id), eq(bills.branchId, branchId)));
   if (!b) throw notFound('bill');
   return b;
+}
+
+export const voidBillInput = z.object({
+  reason: z.string().trim().min(3).max(200),
+  approvalPin: z.string().nullish(),
+});
+
+/**
+ * "Delete" a paid bill from the ledger: the bill stays (status `void`, with who, when and why) but no
+ * longer counts as income, and the money it took is given back in the same shift and day with
+ * matching refund rows, so each day and drawer agree. Works on closed days too: the shift's expected
+ * cash moves with it (a counted drawer will then show the difference).
+ */
+export async function voidBill(ctx: AppContext, actor: Actor, id: string, raw: unknown) {
+  const input = voidBillInput.parse(raw);
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = ctx.clock.now();
+    const branch = await getBranch(tx, actor.branchId);
+    const [bill] = await tx.select().from(bills).where(and(eq(bills.id, id), eq(bills.branchId, branch.id)));
+    if (!bill) throw notFound('bill');
+    if (bill.status === 'void') throw new DomainError('bill_void', 'This bill was already deleted');
+    const approvedBy = await resolveApproval(tx, actor, true, input.approvalPin, 'delete bill');
+
+    const rows = await tx.select().from(payments).where(eq(payments.billId, id));
+
+    await tx.update(bills).set({ status: 'void' }).where(eq(bills.id, id));
+    // It played past an earlier day's end and that day counted its share: today gives it back.
+    if (bill.sessionId) await reverseCarries(tx, branch.id, bill.sessionId, await currentDay(tx, branch, now));
+    const back = rows.filter((p) => p.amount !== 0);
+    if (back.length) {
+      await tx.insert(payments).values(
+        back.map((p) => ({
+          id: newId(),
+          branchId: p.branchId,
+          businessDay: p.businessDay,
+          shiftId: p.shiftId,
+          billId: id,
+          sessionId: p.sessionId,
+          method: p.method,
+          kind: 'refund' as const,
+          amount: -p.amount,
+          note: 'bill deleted',
+          createdBy: actor.id,
+          approvedBy,
+        })),
+      );
+    }
+    // A drawer that was already closed was counted against what it held then; it now holds less.
+    const byShift = new Map<string, number>();
+    for (const p of back) if (p.shiftId && p.method === 'cash') byShift.set(p.shiftId, (byShift.get(p.shiftId) ?? 0) + p.amount);
+    for (const [shiftId, cash] of byShift) {
+      await tx
+        .update(shifts)
+        .set({ expectedCash: sql`${shifts.expectedCash} - ${cash}` })
+        .where(and(eq(shifts.id, shiftId), eq(shifts.status, 'closed'), sql`${shifts.expectedCash} is not null`));
+    }
+    // A closed day keeps the report it closed with: make it agree with the ledger again.
+    const [dayRow] = await tx.select().from(businessDays).where(and(eq(businessDays.branchId, branch.id), eq(businessDays.day, bill.businessDay)));
+    if (dayRow?.status === 'closed' && dayRow.report) {
+      const report = await buildDayReport(tx, branch, bill.businessDay, now);
+      await tx.update(businessDays).set({ report: report as unknown as Record<string, unknown> }).where(eq(businessDays.id, dayRow.id));
+    }
+    await record({
+      type: 'bill.voided',
+      entity: 'bill',
+      entityId: id,
+      payload: { number: bill.number, total: bill.total, sessionId: bill.sessionId },
+      approvedBy,
+      reason: input.reason,
+    });
+    return { id, number: bill.number };
+  });
 }

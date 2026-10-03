@@ -1,8 +1,12 @@
 import { clsx } from 'clsx';
-import { Banknote, Coffee, CreditCard, Gamepad2, MoonStar, UserRound } from 'lucide-react';
-import { useMemo } from 'react';
-import { Card, EmptyState, Money, Num, SectionTitle, Skeleton } from '../../components/ui/primitives';
+import { Banknote, Coffee, CreditCard, Gamepad2, MoonStar, Trash2, UserRound } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Button } from '../../components/ui/button';
+import { useAction } from '../../components/ui/feedback';
+import { Modal } from '../../components/ui/overlays';
+import { Card, EmptyState, Input, Money, Num, SectionTitle, Skeleton } from '../../components/ui/primitives';
 import { useT } from '../../i18n';
+import { post } from '../../lib/api';
 import { useNow } from '../../lib/clock';
 import { useFmt } from '../../lib/format';
 import { sessionBill, useBillingContext } from '../../lib/live';
@@ -26,6 +30,9 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
   const floor = useFloor();
   const now = useNow();
   const ctx = useBillingContext(floor.data);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  // Any day, open or closed. A carried share belongs to its session's bill, so it has no button of its own.
+  const canDelete = (r: Row) => !r.carried;
 
   const rows: Row[] = useMemo(() => {
     // Every row shows this day's share: a bill whose session ran past an earlier day's end leaves
@@ -99,6 +106,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                   <th className="px-4 py-2.5 text-start font-medium">{t('ledger.drinks')}</th>
                   <th className="px-4 py-2.5 text-end font-medium">{t('ledger.total')}</th>
                   <th className="px-4 py-2.5 text-start font-medium">{t('ledger.paidBy')}</th>
+                  <th className="px-2 py-2.5"><span className="sr-only">{t('common.delete')}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -152,6 +160,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                     <td className="px-4 py-3">
                       <PaidChips paid={r.paidByMethod} />
                     </td>
+                    <td className="px-2 py-2 text-end">{canDelete(r) && <DeleteRowButton onClick={() => setDeleting(r)} />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -170,6 +179,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                   <td className="px-4 py-3 text-end">
                     <Money value={totals.total} currency className="justify-end" />
                   </td>
+                  <td />
                   <td />
                 </tr>
               </tfoot>
@@ -192,6 +202,11 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                   </span>
                   <PaidChips paid={r.paidByMethod} />
                 </div>
+                {canDelete(r) && (
+                  <div className="flex justify-end">
+                    <DeleteRowButton onClick={() => setDeleting(r)} />
+                  </div>
+                )}
                 {r.items.length > 0 && (
                   <div className="text-xs text-faint">
                     {r.items.map((i) => `${i.qty}× ${i.name}`).join('، ')}
@@ -203,7 +218,70 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
           </ul>
         </>
       )}
+      {deleting && <DeleteRowModal row={deleting} onClose={() => setDeleting(null)} />}
     </Card>
+  );
+}
+
+function DeleteRowButton({ onClick }: { onClick: () => void }) {
+  const { t } = useT();
+  return (
+    <Button size="sm" variant="ghost" className="text-danger" icon={<Trash2 className="size-4" />} onClick={onClick}>
+      {t('common.delete')}
+    </Button>
+  );
+}
+
+/**
+ * Asks before anything disappears. A paid entry is voided as a bill (its money is given back in
+ * the same shift); a device still open or waiting for payment is cancelled as a session.
+ */
+function DeleteRowModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  const { t } = useT();
+  const f = useFmt();
+  const { busy, run } = useAction();
+  const [reason, setReason] = useState('');
+  const name = row.counter ? t('nav.cafe') : (row.stationName ?? '—');
+  const confirm = async () => {
+    const why = reason.trim() || t('ledger.deleteDefaultReason');
+    const ok = await run(
+      (pin) => (row.open ? post(`/api/sessions/${row.billId}/void`, { reason: why, approvalPin: pin }) : post(`/api/bills/${row.billId}/void`, { reason: why, approvalPin: pin })),
+      { what: name, success: t('common.deleted') },
+    );
+    if (ok) onClose();
+  };
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t('ledger.deleteTitle')}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" size="lg" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" size="lg" loading={busy} icon={<Trash2 className="size-4" />} onClick={confirm}>
+            {t('ledger.deleteConfirm')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="rounded-card bg-surface-2 p-3 text-sm">
+          <div className="flex items-center justify-between gap-3 font-semibold">
+            <span>
+              <span className="num">{name}</span>
+              {row.label && <span className="ms-2 font-normal text-muted">{row.label}</span>}
+            </span>
+            <Money value={row.total} />
+          </div>
+          <div className="mt-0.5 text-xs text-muted tabular-nums">{row.startedAt ? f.time(row.startedAt) : '—'} – {row.endedAt ? f.time(row.endedAt) : '…'}</div>
+        </div>
+        <p className="text-sm leading-relaxed text-muted">{row.open ? t('ledger.deleteBodyOpen') : t('ledger.deleteBody')}</p>
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('ledger.deleteReason')} aria-label={t('ledger.deleteReason')} maxLength={200} />
+      </div>
+    </Modal>
   );
 }
 

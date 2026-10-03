@@ -116,14 +116,20 @@ export function SessionSheet({
           manage && (
             <div className="flex flex-col gap-2">
               {ended ? (
-                <div className="grid grid-cols-[auto_1fr] gap-2">
-                  <Button size="xl" loading={busy} onClick={() => run(() => post(`/api/sessions/${session.id}/reopen`))} icon={<Play className="size-5" />}>
-                    {t('session.reopen')}
+                <>
+                  {/* Ended by mistake: carry on playing, or delete it if it should never have been opened. */}
+                  <div className="grid grid-cols-[auto_1fr] gap-2">
+                    <Button size="xl" loading={busy} onClick={() => run(() => post(`/api/sessions/${session.id}/reopen`))} icon={<Play className="size-5" />}>
+                      {t('session.reopen')}
+                    </Button>
+                    <Button variant="primary" size="xl" onClick={() => onCheckout(session.id)}>
+                      {t('floor.pay')} · <Money value={Math.abs(due)} />
+                    </Button>
+                  </div>
+                  <Button variant="ghost" className="text-danger" icon={<Ban className="size-4" />} onClick={() => setVoidOpen(true)}>
+                    {t('session.void')}
                   </Button>
-                  <Button variant="primary" size="xl" onClick={() => onCheckout(session.id)}>
-                    {t('floor.pay')} · <Money value={Math.abs(due)} />
-                  </Button>
-                </div>
+                </>
               ) : (
                 <div className="grid grid-cols-[auto_1fr] gap-2">
                   <Button
@@ -309,7 +315,7 @@ export function SessionSheet({
           {/* Drinks & food go straight on this device's account */}
           <DeviceDrinks sessionId={session.id} items={bill.data?.items ?? []} canAdd={!ended || can.checkout(role)} />
 
-          {manage && !ended && can.isManager(role) && (
+          {manage && !ended && (
             <Button variant="ghost" className="self-start text-danger" icon={<Ban className="size-4" />} onClick={() => setVoidOpen(true)}>
               {t('session.void')}
             </Button>

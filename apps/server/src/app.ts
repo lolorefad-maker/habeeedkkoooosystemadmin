@@ -22,7 +22,7 @@ import {
   type Permission,
 } from './lib/auth';
 import { HttpError, notFound, unauthorized } from './lib/errors';
-import { checkoutSession, counterSale, getBill } from './services/checkout';
+import { checkoutSession, counterSale, getBill, voidBill } from './services/checkout';
 import { getBranch, getSession } from './services/common';
 import { closeDay, dayReport, listDays } from './services/days';
 import { floorSnapshot } from './services/floor';
@@ -244,6 +244,7 @@ export async function buildApp(ctx: AppContext) {
   app.post('/api/order-items/:id/void', route('order.create', async (req, actor) => voidOrderItem(ctx, actor, id(req), req.body)));
 
   // ------------------------------------------------------------------ bills
+  app.post('/api/bills/:id/void', route('day.close', async (req, actor) => voidBill(ctx, actor, id(req), req.body)));
   app.get('/api/bills/:id', route('floor.view', async (req, actor) => getBill(ctx.db, actor.branchId, id(req))));
   app.get(
     '/api/bills',
