@@ -5,7 +5,7 @@ export const en: Dict = {
   nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Bookings', stock: 'Stock', reports: 'Ledger', settings: 'Settings', rewards: 'Rewards', customers: 'Customer numbers', customersShort: 'Numbers' },
   ledger: {
     deleteTitle: 'Confirm delete', deleteConfirm: 'Confirm delete',
-    deleteBody: 'It leaves the day’s income and the ledger, and its money is taken out of the shift. The audit log keeps who deleted it and why.',
+    deleteBody: 'It leaves the day’s income and the ledger (even on a closed day), and its money is taken out of the shift. The audit log keeps who deleted it and why.',
     deleteBodyOpen: 'The device is still open or unpaid: it will be cancelled. One with orders or payments cannot be deleted.',
     deleteReason: 'Reason (optional)', deleteDefaultReason: 'Deleted from the ledger',
     daily: 'Daily', monthly: 'Monthly', range: 'Period', from: 'From', to: 'To', rangeTotal: 'Income for the period', daysWithIncome: 'days with income',

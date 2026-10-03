@@ -31,8 +31,8 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
   const now = useNow();
   const ctx = useBillingContext(floor.data);
   const [deleting, setDeleting] = useState<Row | null>(null);
-  // Only the open day can change; a part that belongs to an earlier day is never deleted from here.
-  const canDelete = (r: Row) => isOpenDay && !r.carried;
+  // Any day, open or closed. A carried share belongs to its session's bill, so it has no button of its own.
+  const canDelete = (r: Row) => !r.carried;
 
   const rows: Row[] = useMemo(() => {
     // Every row shows this day's share: a bill whose session ran past an earlier day's end leaves
@@ -106,7 +106,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                   <th className="px-4 py-2.5 text-start font-medium">{t('ledger.drinks')}</th>
                   <th className="px-4 py-2.5 text-end font-medium">{t('ledger.total')}</th>
                   <th className="px-4 py-2.5 text-start font-medium">{t('ledger.paidBy')}</th>
-                  {isOpenDay && <th className="px-2 py-2.5"><span className="sr-only">{t('common.delete')}</span></th>}
+                  <th className="px-2 py-2.5"><span className="sr-only">{t('common.delete')}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -160,7 +160,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                     <td className="px-4 py-3">
                       <PaidChips paid={r.paidByMethod} />
                     </td>
-                    {isOpenDay && <td className="px-2 py-2 text-end">{canDelete(r) && <DeleteRowButton onClick={() => setDeleting(r)} />}</td>}
+                    <td className="px-2 py-2 text-end">{canDelete(r) && <DeleteRowButton onClick={() => setDeleting(r)} />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -180,7 +180,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
                     <Money value={totals.total} currency className="justify-end" />
                   </td>
                   <td />
-                  {isOpenDay && <td />}
+                  <td />
                 </tr>
               </tfoot>
             </table>

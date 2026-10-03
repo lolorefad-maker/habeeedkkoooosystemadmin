@@ -68,3 +68,21 @@ describe('deleting a paid bill from the ledger', () => {
     expect(log.find((r) => r.billId === sale.json.billId)).toBeUndefined();
   });
 });
+
+describe('deleting from a closed day', () => {
+  it('works too: the closed day and its drawer lose the bill', async () => {
+    const list = (await h.api('GET', '/api/products', undefined, cashier())).json as Json[];
+    const p = list.find((x) => x.price > 0)!;
+    const day = (await h.floor()).day as string;
+    const sale = await h.api('POST', '/api/counter/sale', { items: [{ productId: p.id, qty: 1 }], payments: [{ method: 'cash', amount: p.price }] }, cashier());
+    const closed = await h.api('POST', '/api/days/close', { stockCounts: [], shift: { countedCash: p.price } }, h.tokens.manager);
+    expect(closed.status).toBe(200);
+    const rep = async () => (await h.api('GET', `/api/reports/day?day=${day}`, undefined, h.tokens.manager)).json as Json;
+    const before = await rep();
+    expect((await h.api('POST', `/api/bills/${sale.json.billId}/void`, { reason: 'wrong entry' }, h.tokens.manager)).status).toBe(200);
+    const after = await rep();
+    expect(after.revenue.bills).toBe(before.revenue.bills - 1);
+    expect(after.revenue.total).toBe(before.revenue.total - p.price);
+    expect(after.payments.net).toBe(before.payments.net - p.price);
+  });
+});

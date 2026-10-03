@@ -11,7 +11,7 @@ import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext, type Record_ } from '../context';
 import type { Q, Tx } from '../db';
-import { bills, branches, dayCarries, orderItems, orders, payments, reservations, segments, sessions, shifts, stations, users } from '../db/schema';
+import { bills, branches, businessDays, dayCarries, orderItems, orders, payments, reservations, segments, sessions, shifts, stations, users } from '../db/schema';
 import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -28,8 +28,9 @@ import {
   toTimeline,
   type Branch,
 } from './common';
-import { AFTER_DAY_END, carriedSoFar } from './carries';
+import { AFTER_DAY_END, carriedSoFar, reverseCarries } from './carries';
 import { returnStationControllers } from './controllers';
+import { buildDayReport } from './days';
 import { insertOrder, orderItemsInput } from './orders';
 import { customerForPhone, earnReward, rewardDiscount, useReward } from './rewards';
 import { sessionItems } from './sessions';
@@ -419,8 +420,8 @@ export const voidBillInput = z.object({
 /**
  * "Delete" a paid bill from the ledger: the bill stays (status `void`, with who, when and why) but no
  * longer counts as income, and the money it took is given back in the same shift and day with
- * matching refund rows, so the day and the drawer agree. Only today's open day, and only a bill
- * whose money and play all belong to that one day.
+ * matching refund rows, so each day and drawer agree. Works on closed days too: the shift's expected
+ * cash moves with it (a counted drawer will then show the difference).
  */
 export async function voidBill(ctx: AppContext, actor: Actor, id: string, raw: unknown) {
   const input = voidBillInput.parse(raw);
@@ -430,20 +431,13 @@ export async function voidBill(ctx: AppContext, actor: Actor, id: string, raw: u
     const [bill] = await tx.select().from(bills).where(and(eq(bills.id, id), eq(bills.branchId, branch.id)));
     if (!bill) throw notFound('bill');
     if (bill.status === 'void') throw new DomainError('bill_void', 'This bill was already deleted');
-    if (bill.businessDay !== (await currentDay(tx, branch, now))) {
-      throw new DomainError('day_closed', 'Only a bill of the open day can be deleted');
-    }
     const approvedBy = await resolveApproval(tx, actor, true, input.approvalPin, 'delete bill');
 
     const rows = await tx.select().from(payments).where(eq(payments.billId, id));
-    if (rows.some((p) => p.businessDay !== bill.businessDay)) {
-      throw new DomainError('bill_spans_days', 'Part of this bill was paid into another day, so it cannot be deleted');
-    }
-    if (bill.sessionId && (await carriedSoFar(tx, [bill.sessionId])).has(bill.sessionId)) {
-      throw new DomainError('bill_spans_days', 'This session played past midnight, so its bill cannot be deleted');
-    }
 
     await tx.update(bills).set({ status: 'void' }).where(eq(bills.id, id));
+    // It played past an earlier day's end and that day counted its share: today gives it back.
+    if (bill.sessionId) await reverseCarries(tx, branch.id, bill.sessionId, await currentDay(tx, branch, now));
     const back = rows.filter((p) => p.amount !== 0);
     if (back.length) {
       await tx.insert(payments).values(
@@ -471,6 +465,12 @@ export async function voidBill(ctx: AppContext, actor: Actor, id: string, raw: u
         .update(shifts)
         .set({ expectedCash: sql`${shifts.expectedCash} - ${cash}` })
         .where(and(eq(shifts.id, shiftId), eq(shifts.status, 'closed'), sql`${shifts.expectedCash} is not null`));
+    }
+    // A closed day keeps the report it closed with: make it agree with the ledger again.
+    const [dayRow] = await tx.select().from(businessDays).where(and(eq(businessDays.branchId, branch.id), eq(businessDays.day, bill.businessDay)));
+    if (dayRow?.status === 'closed' && dayRow.report) {
+      const report = await buildDayReport(tx, branch, bill.businessDay, now);
+      await tx.update(businessDays).set({ report: report as unknown as Record<string, unknown> }).where(eq(businessDays.id, dayRow.id));
     }
     await record({
       type: 'bill.voided',
