@@ -430,15 +430,18 @@ function UnpaidChip({
   const f = useFmt();
   return (
     <div data-status="unpaid" className="tint flex shrink-0 items-center gap-3 rounded-card border py-2 pe-2 ps-3.5">
-      <button onClick={onOpen} className="flex flex-col items-start text-start">
-        <span className="flex items-center gap-1.5 text-sm font-semibold">
-          <Hourglass className="st-fg size-3.5" />
-          <span className="num">{stationName}</span>
-          {session.label && <span className="font-normal text-muted">· {session.label}</span>}
+      {/* The whole chip opens the device: continue playing, delete, or pay. */}
+      <button onClick={onOpen} className="flex items-center gap-3 text-start" aria-label={`${stationName} — ${t('session.reopen')} / ${t('session.void')}`}>
+        <span className="flex flex-col items-start">
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            <Hourglass className="st-fg size-3.5" />
+            <span className="num">{stationName}</span>
+            {session.label && <span className="font-normal text-muted">· {session.label}</span>}
+          </span>
+          <span className="text-xs text-muted">{session.endedAt && t('session.ended', { time: f.time(session.endedAt) })}</span>
         </span>
-        <span className="text-xs text-muted">{session.endedAt && t('session.ended', { time: f.time(session.endedAt) })}</span>
+        <Money value={Math.max(0, total)} className="text-base font-semibold" />
       </button>
-      <Money value={Math.max(0, total)} className="text-base font-semibold" />
       <Button size="sm" variant="primary" onClick={onPay}>
         {t('floor.pay')}
       </Button>
