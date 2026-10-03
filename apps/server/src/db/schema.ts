@@ -275,6 +275,28 @@ export const bills = pgTable(
   ],
 );
 
+/**
+ * Cash the accountant (or the owner) takes out of the drawer during a shift. It lowers what the drawer
+ * should hold, but it is not a sale and not a refund: the day's income does not change and the shift stays open.
+ */
+export const cashWithdrawals = pgTable(
+  'cash_withdrawals',
+  {
+    id: uuid('id').primaryKey(),
+    branchId: uuid('branch_id').notNull().references(() => branches.id),
+    shiftId: uuid('shift_id').notNull(),
+    businessDay: text('business_day').notNull(),
+    /** Positive minor units. */
+    amount: integer('amount').notNull(),
+    note: text('note'),
+    status: text('status').$type<'active' | 'void'>().notNull().default('active'),
+    voidReason: text('void_reason'),
+    createdBy: uuid('created_by'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('cash_withdrawals_shift_idx').on(t.shiftId), index('cash_withdrawals_branch_day_idx').on(t.branchId, t.businessDay)],
+);
+
 export type PaymentMethod = 'cash' | 'card' | 'wallet';
 export type PaymentKind = 'payment' | 'prepaid' | 'deposit' | 'refund';
 

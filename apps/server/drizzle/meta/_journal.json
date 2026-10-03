@@ -71,6 +71,13 @@
       "when": 1791038057681,
       "tag": "0009_day_is_the_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791054722339,
+      "tag": "0010_cash_withdrawals",
+      "breakpoints": true
     }
   ]
 }

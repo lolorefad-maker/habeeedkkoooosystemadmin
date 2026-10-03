@@ -82,7 +82,18 @@ export interface Shift {
   refunds: number;
   transactions: number;
   expectedCash: number;
+  /** Cash the accountant took out of the drawer during this shift (already taken off `expectedCash`). */
+  withdrawn: number;
+  withdrawals: { id: string; amount: number; note: string | null; createdAt: number }[];
   status: 'open' | 'closed';
+}
+
+export interface Withdrawal {
+  id: string;
+  amount: number;
+  note: string | null;
+  createdAt: number;
+  userName: string;
 }
 
 export interface RawRule {

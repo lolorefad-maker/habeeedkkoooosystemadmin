@@ -4,7 +4,7 @@ export const en: Dict = {
   app: { name: 'Habeedko', tagline: 'Gaming lounge' },
   nav: { floor: 'Floor', cafe: 'Cafeteria', controllers: 'Controllers', reservations: 'Bookings', stock: 'Stock', reports: 'Ledger', settings: 'Settings', rewards: 'Rewards', customers: 'Customer numbers', customersShort: 'Numbers' },
   ledger: {
-    deleteTitle: 'Confirm delete', deleteConfirm: 'Confirm delete',
+    accountantTook: 'Taken by the accountant', deleteTitle: 'Confirm delete', deleteConfirm: 'Confirm delete',
     deleteBody: 'It leaves the day’s income and the ledger (even on a closed day), and its money is taken out of the shift. The audit log keeps who deleted it and why.',
     cafeLog: 'Cafeteria purchases', dayProfit: 'Profit so far today', devicesPlayed: '{n} devices played', increase: 'Increase (what came in)',
     noShift: 'No shift was opened on this day', shiftOpenedAt: 'Opened', shiftFloat: 'Value when opened', shiftClosedAt: 'Closed',
@@ -144,6 +144,8 @@ export const en: Dict = {
     delete: 'Delete booking', deleteConfirm: 'Delete the booking for {name}?', deleteBody: 'It leaves the bookings and the floor, and the station is free at that time again.',
   },
   shift: {
+    take: 'Taken by the accountant', takeHint: 'It comes off the drawer’s expected cash; it does not change the day’s income and does not close the shift.',
+    takeSave: 'Record', takeNote: 'Note (optional)', takeDone: 'Withdrawal recorded', takeCancelled: 'Withdrawal cancelled',
     endsDay: 'Closing the shift ends the day — even after midnight.', runningWarn: '{n} device(s) still playing: each is counted whole on the day it is paid.',
     title: 'Shift', open: 'Open shift', close: 'Close shift', float: 'Opening cash in drawer', expected: 'Expected in drawer',
     counted: 'Counted cash', variance: 'Difference', none: 'No open shift', noneHint: 'Open a shift to take payments',
@@ -270,7 +272,7 @@ export const en: Dict = {
     'session.started': 'Session started', 'session.paused': 'Paused', 'session.resumed': 'Resumed', 'session.ended': 'Session ended',
     'session.mode_changed': 'Mode changed', 'session.transferred': 'Moved', 'session.plan_changed': 'Duration changed',
     'session.reopened': 'Session reopened', 'session.voided': 'Session voided', 'order.created': 'New order',
-    'order.item_voided': 'Item voided', 'bill.paid': 'Bill paid', 'bill.voided': 'Bill deleted',
+    'order.item_voided': 'Item voided', 'bill.paid': 'Bill paid', 'bill.voided': 'Bill deleted', 'cash.withdrawn': 'Cash taken (accountant)', 'cash.withdrawal_voided': 'Cash withdrawal cancelled',
     'reservation.created': 'Reservation created', 'reservation.cancelled': 'Reservation cancelled', 'reservation.no_show': 'No-show',
     'reservation.checked_in': 'Checked in', 'reservation.refunded': 'Deposit refunded', 'shift.opened': 'Shift opened',
     'shift.closed': 'Shift closed', 'day.closed': 'Day ended', 'setup.imported': 'Setup imported', 'station.deleted': 'Station deleted', 'product.deleted': 'Product deleted', 'controller.deleted': 'Controller deleted', 'reservation.deleted': 'Booking deleted', 'settings.updated': 'Settings changed', 'station.created': 'Station added',

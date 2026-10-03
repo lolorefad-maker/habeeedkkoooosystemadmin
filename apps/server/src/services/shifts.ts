@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { mutate, type AppContext, type Record_ } from '../context';
 import type { Q } from '../db';
-import { payments, shifts, users } from '../db/schema';
+import { cashWithdrawals, payments, shifts, users } from '../db/schema';
 import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -31,13 +31,22 @@ export async function shiftSummary(q: Q, shiftId: string) {
     if (p.amount < 0) refunds += -p.amount;
   }
   const [u] = await q.select({ name: users.name }).from(users).where(eq(users.id, s.userId));
+  // Cash the accountant took out: the drawer holds less, but income and refunds are untouched.
+  const taken = await q
+    .select({ id: cashWithdrawals.id, amount: cashWithdrawals.amount, note: cashWithdrawals.note, createdAt: cashWithdrawals.createdAt })
+    .from(cashWithdrawals)
+    .where(and(eq(cashWithdrawals.shiftId, shiftId), eq(cashWithdrawals.status, 'active')))
+    .orderBy(cashWithdrawals.createdAt);
+  const withdrawn = taken.reduce((a, w) => a + w.amount, 0);
   return {
     ...s,
     userName: u?.name ?? '',
     byMethod,
     refunds,
     transactions: rows.length,
-    expectedCash: s.openingFloat + (byMethod.cash ?? 0),
+    withdrawn,
+    withdrawals: taken.map((w) => ({ id: w.id, amount: w.amount, note: w.note, createdAt: w.createdAt.getTime() })),
+    expectedCash: s.openingFloat + (byMethod.cash ?? 0) - withdrawn,
   };
 }
 
