@@ -6,7 +6,11 @@ export const en: Dict = {
   ledger: {
     deleteTitle: 'Confirm delete', deleteConfirm: 'Confirm delete',
     deleteBody: 'It leaves the day’s income and the ledger (even on a closed day), and its money is taken out of the shift. The audit log keeps who deleted it and why.',
-    deleteBodyOpen: 'The device is still open or unpaid: it will be cancelled. One with orders or payments cannot be deleted.',
+    cafeLog: 'Cafeteria purchases', dayProfit: 'Profit so far today', devicesPlayed: '{n} devices played', increase: 'Increase (what came in)',
+    noShift: 'No shift was opened on this day', shiftOpenedAt: 'Opened', shiftFloat: 'Value when opened', shiftClosedAt: 'Closed',
+    reset: 'Start from zero', resetTitle: 'Start the ledger from zero?',
+    resetBody: 'Every earlier day disappears, and the current day and shift are closed without a count; a new day starts now. Playing devices are not touched. The old data stays saved, just hidden.',
+    resetWord: 'reset', resetType: 'Type “{word}” to confirm', resetDone: 'The ledger starts from zero',
     deleteReason: 'Reason (optional)', deleteDefaultReason: 'Deleted from the ledger',
     daily: 'Daily', monthly: 'Monthly', range: 'Period', from: 'From', to: 'To', rangeTotal: 'Income for the period', daysWithIncome: 'days with income',
     last7: 'Last 7 days', lastMonth: 'Last month', thisYear: 'This year', rangeInvalid: 'The start day must come before the end day',
@@ -140,6 +144,7 @@ export const en: Dict = {
     delete: 'Delete booking', deleteConfirm: 'Delete the booking for {name}?', deleteBody: 'It leaves the bookings and the floor, and the station is free at that time again.',
   },
   shift: {
+    endsDay: 'Closing the shift ends the day — even after midnight.', runningWarn: '{n} device(s) still playing: each is counted whole on the day it is paid.',
     title: 'Shift', open: 'Open shift', close: 'Close shift', float: 'Opening cash in drawer', expected: 'Expected in drawer',
     counted: 'Counted cash', variance: 'Difference', none: 'No open shift', noneHint: 'Open a shift to take payments',
     byMethod: 'By payment method', openedBy: 'Opened by {name} at {time}', closed: 'Shift closed', opened: 'Shift opened',

@@ -1,0 +1,1 @@
+ALTER TABLE "business_days" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;

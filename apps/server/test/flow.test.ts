@@ -241,30 +241,28 @@ describe('end of day', () => {
     const early = await api('POST', '/api/days/close', {}, tokens.manager);
     expect(early.json.code).toBe('shift_open');
 
-    const closed = await api('POST', '/api/shifts/close', { countedCash: shift.expectedCash - 500 }, tokens.cashier);
-    expect(closed.json.variance).toBe(-500);
-
     const pepsi = (await api('GET', '/api/stock', undefined, tokens.manager)).json.find((p: Json) => p.name === 'بيبسي');
     expect(pepsi.stockQty).toBe(46);
-    const day = await api('POST', '/api/days/close', { counts: [{ productId: pepsi.id, countedQty: 45 }] }, tokens.manager);
+    // One step: the drawer is counted (the shift closes) and the day ends with its stock count.
+    const day = await api('POST', '/api/days/close', { counts: [{ productId: pepsi.id, countedQty: 45 }], shift: { countedCash: shift.expectedCash - 500 } }, tokens.manager);
     expect(day.status).toBe(200);
     const report = day.json.report;
     expect(report.revenue.bills).toBe(3);
-    // Paid bills, plus what the stations still playing earned up to the close (that is this day's too).
-    expect(report.revenue.total - report.revenue.carriedIn).toBe(7600 + 1000 + 1000);
-    expect(report.revenue.carriedIn).toBeGreaterThan(0);
+    // The day is the shift: nothing is split, a device still playing is paid on a later day.
+    expect(report.revenue.total).toBe(7600 + 1000 + 1000);
+    expect(report.revenue.carriedIn).toBe(0);
     expect(report.stock[0]).toMatchObject({ expected: 46, counted: 45, variance: -1 });
     expect(report.openSessions.count).toBeGreaterThan(0);
     expect(report.shifts[0].variance).toBe(-500);
     expect(day.json.next).toBe('2026-09-26');
   });
 
-  it('rolls the day over automatically at the cutoff', async () => {
+  it('does not roll the day over by itself at the cutoff', async () => {
     t = Date.parse('2026-09-27T03:30:00Z'); // 06:30 Amman on the 27th
     await tick(ctx);
     const days = (await api('GET', '/api/days', undefined, tokens.manager)).json as Json[];
-    expect(days.find((d) => d.day === '2026-09-26')).toMatchObject({ status: 'closed', auto: true });
-    expect(days.find((d) => d.day === '2026-09-27')?.status).toBe('open');
+    expect(days.find((d) => d.day === '2026-09-26')?.status).toBe('open');
+    expect(days.find((d) => d.day === '2026-09-27')).toBeUndefined();
   });
 
   it('keeps an audit trail of everything', async () => {

@@ -8,6 +8,7 @@ import type { Actor } from '../lib/auth';
 import { notFound } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { currentDay, getBranch, openShift } from './common';
+import { archivedDays } from './ledger';
 
 export const openShiftInput = z.object({ openingFloat: z.number().int().min(0) });
 function closeShiftInputBase() {
@@ -49,7 +50,8 @@ export async function uncountedShifts(q: Q, branchId: string) {
     .where(and(eq(shifts.branchId, branchId), eq(shifts.status, 'closed'), isNull(shifts.countedCash), isNull(shifts.closedBy)))
     .orderBy(desc(shifts.closedAt))
     .limit(5);
-  return rows.map((r) => ({ id: r.id, userName: r.userName ?? '', businessDay: r.businessDay, closedAt: r.closedAt?.getTime() ?? null, expectedCash: r.expectedCash ?? 0 }));
+  const hidden = await archivedDays(q, branchId);
+  return rows.filter((r) => !hidden.has(r.businessDay)).map((r) => ({ id: r.id, userName: r.userName ?? '', businessDay: r.businessDay, closedAt: r.closedAt?.getTime() ?? null, expectedCash: r.expectedCash ?? 0 }));
 }
 
 export async function currentShift(q: Q, branchId: string) {

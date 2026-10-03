@@ -24,7 +24,7 @@ import {
 import { HttpError, notFound, unauthorized } from './lib/errors';
 import { checkoutSession, counterSale, getBill, voidBill } from './services/checkout';
 import { getBranch, getSession } from './services/common';
-import { closeDay, dayReport, listDays } from './services/days';
+import { closeDay, dayReport, endShiftAndDay, listDays, resetLedger } from './services/days';
 import { floorSnapshot } from './services/floor';
 import { monthReport, rangeReport, sessionsLog } from './services/ledger';
 import { exportSetup, importSetup } from './services/setup';
@@ -60,7 +60,7 @@ import {
   stopQuickDiscount,
   updateBranch,
 } from './services/settings';
-import { countClosedShift, currentShift, endShift, startShift } from './services/shifts';
+import { countClosedShift, currentShift, startShift } from './services/shifts';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -279,7 +279,7 @@ export async function buildApp(ctx: AppContext) {
   // ------------------------------------------------------------------ shifts & days
   app.get('/api/shifts/current', route('floor.view', async (_req, actor) => ({ shift: await currentShift(ctx.db, actor.branchId) })));
   app.post('/api/shifts/open', route('shift.manage', async (req, actor) => startShift(ctx, actor, req.body)));
-  app.post('/api/shifts/close', route('shift.manage', async (req, actor) => endShift(ctx, actor, req.body)));
+  app.post('/api/shifts/close', route('shift.manage', async (req, actor) => endShiftAndDay(ctx, actor, req.body)));
   // Count, afterwards, a shift that closed by itself at the day's end.
   app.post('/api/shifts/:id/count', route('shift.manage', async (req, actor) => countClosedShift(ctx, actor, id(req), req.body)));
 
@@ -291,6 +291,7 @@ export async function buildApp(ctx: AppContext) {
       return dayReport(ctx.db, actor.branchId, day ?? null, now());
     }),
   );
+  app.post('/api/ledger/reset', route('settings.manage', async (req, actor) => resetLedger(ctx, actor, req.body)));
   app.post('/api/days/close', route('day.close', async (req, actor) => closeDay(ctx, actor, req.body)));
 
   // ------------------------------------------------------------------ ledger (daily / monthly)
