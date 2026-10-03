@@ -40,6 +40,8 @@ import { SoundToggle } from './SoundToggle';
 interface NavItem {
   to: string;
   label: TKey;
+  /** A shorter name for the phone's bottom bar, where eight tabs share the width. */
+  short?: TKey;
   icon: LucideIcon;
   allow?: (r?: Role) => boolean;
   mobile?: boolean;
@@ -51,7 +53,7 @@ const NAV: NavItem[] = [
   { to: '/controllers', label: 'nav.controllers', icon: Gamepad, mobile: true },
   { to: '/reservations', label: 'nav.reservations', icon: CalendarDays, allow: can.reservations, mobile: true },
   { to: '/stock', label: 'nav.stock', icon: Boxes, allow: can.stock, mobile: true },
-  { to: '/customers', label: 'nav.customers', icon: Contact, allow: can.checkout },
+  { to: '/customers', label: 'nav.customers', short: 'nav.customersShort', icon: Contact, allow: can.checkout, mobile: true },
   { to: '/rewards', label: 'nav.rewards', icon: Gift, allow: can.checkout },
   { to: '/reports', label: 'nav.reports', icon: BarChart3, allow: can.reports, mobile: true },
   { to: '/settings', label: 'nav.settings', icon: Settings, allow: can.settings, mobile: true },
@@ -145,7 +147,7 @@ export function AppShell() {
                 }
               >
                 <n.icon className="size-5 shrink-0" aria-hidden />
-                <span className="max-w-full truncate">{t(n.label)}</span>
+                <span className="max-w-full truncate">{t(n.short ?? n.label)}</span>
               </NavLink>
             ))}
         </nav>

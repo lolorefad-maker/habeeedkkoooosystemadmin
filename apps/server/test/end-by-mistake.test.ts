@@ -40,3 +40,31 @@ describe('a session ended by mistake', () => {
     expect(((await h.floor()).sessions as Json[]).find((x) => x.id === s.json.id)).toBeUndefined();
   });
 });
+
+describe('deleting a paid bill from the ledger', () => {
+  const day = async () => (await h.floor()).day as string;
+  const report = async () => (await h.api('GET', `/api/reports/day?day=${await day()}`, undefined, h.tokens.manager)).json as Json;
+
+  it('takes it out of the income and the drawer; keeps the row; refuses a second delete', async () => {
+    const list = (await h.api('GET', '/api/products', undefined, cashier())).json as Json[];
+    const p = list.find((x) => x.price > 0)!;
+    const before = await report();
+    const sale = await h.api('POST', '/api/counter/sale', { items: [{ productId: p.id, qty: 1 }], payments: [{ method: 'cash', amount: p.price }] }, cashier());
+    expect(sale.status).toBe(200);
+    expect((await report()).revenue.total).toBe(before.revenue.total + p.price);
+
+    // The cashier cannot (the ledger is the manager's); the manager can.
+    expect((await h.api('POST', `/api/bills/${sale.json.billId}/void`, { reason: 'wrong entry' }, cashier())).status).toBe(403);
+    const done = await h.api('POST', `/api/bills/${sale.json.billId}/void`, { reason: 'wrong entry' }, h.tokens.manager);
+    expect(done.status).toBe(200);
+
+    const after = await report();
+    expect(after.revenue.total).toBe(before.revenue.total);
+    expect(after.payments.net).toBe(before.payments.net);
+    expect((await h.api('GET', `/api/bills/${sale.json.billId}`, undefined, cashier())).json.status).toBe('void');
+    const again = await h.api('POST', `/api/bills/${sale.json.billId}/void`, { reason: 'wrong entry' }, h.tokens.manager);
+    expect(again.json.code).toBe('bill_void');
+    const log = (await h.api('GET', `/api/reports/sessions?day=${await day()}`, undefined, h.tokens.manager)).json as Json[];
+    expect(log.find((r) => r.billId === sale.json.billId)).toBeUndefined();
+  });
+});

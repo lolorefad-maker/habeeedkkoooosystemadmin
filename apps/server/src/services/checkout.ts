@@ -410,3 +410,76 @@ export async function getBill(q: Q, branchId: string, id: string) {
   if (!b) throw notFound('bill');
   return b;
 }
+
+export const voidBillInput = z.object({
+  reason: z.string().trim().min(3).max(200),
+  approvalPin: z.string().nullish(),
+});
+
+/**
+ * "Delete" a paid bill from the ledger: the bill stays (status `void`, with who, when and why) but no
+ * longer counts as income, and the money it took is given back in the same shift and day with
+ * matching refund rows, so the day and the drawer agree. Only today's open day, and only a bill
+ * whose money and play all belong to that one day.
+ */
+export async function voidBill(ctx: AppContext, actor: Actor, id: string, raw: unknown) {
+  const input = voidBillInput.parse(raw);
+  return mutate(ctx, actor, async (tx, record) => {
+    const now = ctx.clock.now();
+    const branch = await getBranch(tx, actor.branchId);
+    const [bill] = await tx.select().from(bills).where(and(eq(bills.id, id), eq(bills.branchId, branch.id)));
+    if (!bill) throw notFound('bill');
+    if (bill.status === 'void') throw new DomainError('bill_void', 'This bill was already deleted');
+    if (bill.businessDay !== (await currentDay(tx, branch, now))) {
+      throw new DomainError('day_closed', 'Only a bill of the open day can be deleted');
+    }
+    const approvedBy = await resolveApproval(tx, actor, true, input.approvalPin, 'delete bill');
+
+    const rows = await tx.select().from(payments).where(eq(payments.billId, id));
+    if (rows.some((p) => p.businessDay !== bill.businessDay)) {
+      throw new DomainError('bill_spans_days', 'Part of this bill was paid into another day, so it cannot be deleted');
+    }
+    if (bill.sessionId && (await carriedSoFar(tx, [bill.sessionId])).has(bill.sessionId)) {
+      throw new DomainError('bill_spans_days', 'This session played past midnight, so its bill cannot be deleted');
+    }
+
+    await tx.update(bills).set({ status: 'void' }).where(eq(bills.id, id));
+    const back = rows.filter((p) => p.amount !== 0);
+    if (back.length) {
+      await tx.insert(payments).values(
+        back.map((p) => ({
+          id: newId(),
+          branchId: p.branchId,
+          businessDay: p.businessDay,
+          shiftId: p.shiftId,
+          billId: id,
+          sessionId: p.sessionId,
+          method: p.method,
+          kind: 'refund' as const,
+          amount: -p.amount,
+          note: 'bill deleted',
+          createdBy: actor.id,
+          approvedBy,
+        })),
+      );
+    }
+    // A drawer that was already closed was counted against what it held then; it now holds less.
+    const byShift = new Map<string, number>();
+    for (const p of back) if (p.shiftId && p.method === 'cash') byShift.set(p.shiftId, (byShift.get(p.shiftId) ?? 0) + p.amount);
+    for (const [shiftId, cash] of byShift) {
+      await tx
+        .update(shifts)
+        .set({ expectedCash: sql`${shifts.expectedCash} - ${cash}` })
+        .where(and(eq(shifts.id, shiftId), eq(shifts.status, 'closed'), sql`${shifts.expectedCash} is not null`));
+    }
+    await record({
+      type: 'bill.voided',
+      entity: 'bill',
+      entityId: id,
+      payload: { number: bill.number, total: bill.total, sessionId: bill.sessionId },
+      approvedBy,
+      reason: input.reason,
+    });
+    return { id, number: bill.number };
+  });
+}
