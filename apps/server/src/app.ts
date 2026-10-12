@@ -27,6 +27,7 @@ import { getBranch, getSession } from './services/common';
 import { closeDay, dayReport, endShiftAndDay, listDays, resetLedger } from './services/days';
 import { floorSnapshot } from './services/floor';
 import { monthReport, rangeReport, sessionsLog } from './services/ledger';
+import { addManualEntry } from './services/manualEntry';
 import { exportSetup, importSetup } from './services/setup';
 import { createCustomer, listCustomers, updateCustomer } from './services/customers';
 import { billCustomer, listRewards, lookupCustomer, markRewardNotified, voidReward } from './services/rewards';
@@ -303,6 +304,7 @@ export async function buildApp(ctx: AppContext) {
     }),
   );
   app.post('/api/ledger/reset', route('settings.manage', async (req, actor) => resetLedger(ctx, actor, req.body)));
+  app.post('/api/ledger/manual-entry', route('reports.view', async (req, actor) => addManualEntry(ctx, actor, req.body)));
   app.post('/api/days/close', route('day.close', async (req, actor) => closeDay(ctx, actor, req.body)));
 
   // ------------------------------------------------------------------ ledger (daily / monthly)
@@ -435,3 +437,4 @@ export async function buildApp(ctx: AppContext) {
 
   return app;
 }
+

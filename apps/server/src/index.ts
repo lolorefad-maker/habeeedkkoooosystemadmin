@@ -6,6 +6,7 @@ import { openDatabase } from './db';
 import { attachRealtime } from './realtime';
 import { startScheduler, tick } from './scheduler';
 import { seedIfEmpty } from './seed';
+import { ensureDay11PaperSessions } from './services/manualEntry';
 
 const config = loadConfig();
 assertSafeConfig(config);
@@ -13,6 +14,7 @@ const database = await openDatabase({ databaseUrl: config.databaseUrl, dataDir: 
 const seeded = await seedIfEmpty(database.db, { demo: config.seedDemo, owner: config.owner });
 
 const ctx: AppContext = { db: database.db, clock: systemClock, bus: new Bus(), config };
+await ensureDay11PaperSessions(ctx);
 const app = await buildApp(ctx);
 const realtime = attachRealtime(app.server, ctx);
 
@@ -43,3 +45,4 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+

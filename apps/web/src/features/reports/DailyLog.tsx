@@ -1,5 +1,6 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Banknote, Coffee, CreditCard, Gamepad2, MoonStar, Trash2, UserRound } from 'lucide-react';
+import { Banknote, Coffee, CreditCard, Gamepad2, MoonStar, Plus, Trash2, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { useAction } from '../../components/ui/feedback';
@@ -31,6 +32,7 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
   const now = useNow();
   const ctx = useBillingContext(floor.data);
   const [deleting, setDeleting] = useState<Row | null>(null);
+  const [adding, setAdding] = useState(false);
   // Any day, open or closed, but only an entry that was paid: a device still playing is never touched from here.
   const canDelete = (r: Row) => !r.carried && !r.open;
 
@@ -87,8 +89,11 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
 
   return (
     <Card className="overflow-hidden">
-      <div className="px-5 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
         <SectionTitle>{t('ledger.sessionsLog')}</SectionTitle>
+        <Button size="sm" variant="secondary" className="no-print mb-3" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>
+          إضافة جلسة
+        </Button>
       </div>
       {rows.length === 0 ? (
         <div className="px-5 pb-5">
@@ -221,7 +226,163 @@ export function DailyLog({ day, isOpenDay }: { day: string; isOpenDay: boolean }
         </>
       )}
       {deleting && <DeleteRowModal row={deleting} onClose={() => setDeleting(null)} />}
+      {adding && <AddManualEntryModal day={day} stations={floor.data?.stations.map((s) => s.name) ?? []} onClose={() => setAdding(false)} />}
     </Card>
+  );
+}
+
+const PAPER_PRESETS = [
+  { stationName: 'جهاز 1', hours: 4, minutes: 20, jd: '8.35' },
+  { stationName: 'جهاز 2', hours: 1, minutes: 0, jd: '1.50' },
+  { stationName: 'جهاز 5', hours: 1, minutes: 20, jd: '2.50' },
+  { stationName: 'VIP 1', hours: 5, minutes: 10, jd: '10.25' },
+] as const;
+
+function AddManualEntryModal({ day, stations, onClose }: { day: string; stations: string[]; onClose: () => void }) {
+  const { t } = useT();
+  const qc = useQueryClient();
+  const { busy, run } = useAction();
+  const [stationName, setStationName] = useState(stations[0] ?? 'جهاز 1');
+  const [hours, setHours] = useState('1');
+  const [minutes, setMinutes] = useState('0');
+  const [amountJd, setAmountJd] = useState('');
+  const [method, setMethod] = useState<'cash' | 'card'>('cash');
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['sessions-log'] });
+    qc.invalidateQueries({ queryKey: ['day-report'] });
+    qc.invalidateQueries({ queryKey: ['days'] });
+    qc.invalidateQueries({ queryKey: ['month-report'] });
+    qc.invalidateQueries({ queryKey: ['range-report'] });
+  };
+
+  const submitSingle = async () => {
+    const dur = (parseInt(hours || '0', 10) || 0) * 60 + (parseInt(minutes || '0', 10) || 0);
+    const totalMinor = Math.round(parseFloat(amountJd.replace(',', '.') || '0') * 1000);
+    if (!stationName.trim() || dur <= 0 || totalMinor <= 0) return;
+    const ok = await run(
+      () =>
+        post('/api/ledger/manual-entry', {
+          day,
+          stationName: stationName.trim(),
+          durationMinutes: dur,
+          total: totalMinor,
+          method,
+        }),
+      { what: stationName, success: 'تمت إضافة الجلسة للجرد' },
+    );
+    if (ok) {
+      refresh();
+      onClose();
+    }
+  };
+
+  const submitPaperBatch = async () => {
+    const ok = await run(
+      async () => {
+        for (const p of PAPER_PRESETS) {
+          await post('/api/ledger/manual-entry', {
+            day,
+            stationName: p.stationName,
+            durationMinutes: p.hours * 60 + p.minutes,
+            total: Math.round(parseFloat(p.jd) * 1000),
+            method: 'cash',
+          });
+        }
+      },
+      { what: 'جلسات الورقة (4 أجهزة)', success: 'تمت إضافة الـ 4 أجهزة للجرد' },
+    );
+    if (ok) {
+      refresh();
+      onClose();
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`إضافة جلسة يدوية للجرد (${day})`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" size="lg" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button size="lg" loading={busy} icon={<Plus className="size-4" />} onClick={submitSingle}>
+            إضافة للجرد
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3.5 text-sm">
+        <div className="rounded-card border border-line bg-surface-2 p-3">
+          <div className="mb-2 text-xs font-medium text-muted">إضافة سريعة لجلسات الورقة (جهاز 1، جهاز 2، جهاز 5، VIP 1):</div>
+          <Button variant="secondary" size="sm" loading={busy} onClick={submitPaperBatch} className="w-full justify-center">
+            + إضافة الـ 4 أجهزة دفعة واحدة (22.600 د.أ)
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted">اسم الجهاز</label>
+          <Input value={stationName} onChange={(e) => setStationName(e.target.value)} placeholder="مثال: جهاز 1 أو VIP 1" />
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {['جهاز 1', 'جهاز 2', 'جهاز 5', 'VIP 1', ...stations.slice(0, 6)].map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setStationName(name)}
+                className={clsx(
+                  'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+                  stationName === name ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-surface-2 text-muted hover:text-fg',
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted">الساعات</label>
+            <Input type="number" min={0} max={24} value={hours} onChange={(e) => setHours(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted">الدقائق</label>
+            <Input type="number" min={0} max={59} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted">الحساب (بالدينار، مثال: 8.35)</label>
+          <Input type="number" step="0.05" min={0} value={amountJd} onChange={(e) => setAmountJd(e.target.value)} placeholder="8.35" />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMethod('cash')}
+            className={clsx(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-control border py-2 text-xs font-medium',
+              method === 'cash' ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-surface-2 text-muted',
+            )}
+          >
+            <Banknote className="size-4" /> {t('checkout.cash')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMethod('card')}
+            className={clsx(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-control border py-2 text-xs font-medium',
+              method === 'card' ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-surface-2 text-muted',
+            )}
+          >
+            <CreditCard className="size-4" /> {t('checkout.card')}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -399,3 +560,4 @@ export function CafeLog({ day }: { day: string }) {
     </Card>
   );
 }
+
