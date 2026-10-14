@@ -1,9 +1,22 @@
 import { businessDayOf, businessDayRange } from '@lounge/core';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { DateTime } from 'luxon';
 import { z } from 'zod';
 import { mutate, type AppContext } from '../context';
 import type { Tx } from '../db';
-import { bills, branches, businessDays, payments, stations } from '../db/schema';
+import {
+  bills,
+  branches,
+  businessDays,
+  cashWithdrawals,
+  dayCarries,
+  events,
+  payments,
+  rewards,
+  shifts,
+  stations,
+  stockMovements,
+} from '../db/schema';
 import type { Actor } from '../lib/auth';
 import { newId } from '../lib/ids';
 import { currentDay, getBranch, openShift, type Branch } from './common';
@@ -196,7 +209,6 @@ const DAY_11_PAPER_ENTRIES = [
 
 /**
  * Ensures the 4 paper sessions for the 11th of the month are present in the ledger.
- * Idempotent: checks `paperSeedKey` inside existing bills on that day so it never duplicates.
  */
 export async function ensureDay11PaperSessions(ctx: AppContext) {
   const allBranches = await ctx.db.select({ id: branches.id }).from(branches);
@@ -231,6 +243,115 @@ export async function ensureDay11PaperSessions(ctx: AppContext) {
           paperSeedKey: item.key,
         });
       }
+    });
+  }
+}
+
+/**
+ * Shifts ledger dates back by 1 day starting from 2026-10-13 up to today:
+ * 2026-10-13 -> 2026-10-12
+ * 2026-10-14 -> 2026-10-13
+ * and so on.
+ * Runs once safely (idempotent).
+ */
+export async function shiftLedgerDatesFromOct13(ctx: AppContext) {
+  const allBranches = await ctx.db.select({ id: branches.id }).from(branches);
+  const now = ctx.clock.now();
+
+  for (const b of allBranches) {
+    const [alreadyDone] = await ctx.db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.branchId, b.id), eq(events.type, 'system.ledger_shifted_oct13_v1')));
+
+    if (alreadyDone) continue;
+
+    await ctx.db.transaction(async (tx) => {
+      const branch = await getBranch(tx, b.id);
+
+      // Collect all distinct days >= 2026-10-13 across all tables
+      const [allBills, allPayments, allShifts, allDays] = await Promise.all([
+        tx.select({ day: bills.businessDay }).from(bills).where(and(eq(bills.branchId, b.id), gte(bills.businessDay, '2026-10-13'))),
+        tx.select({ day: payments.businessDay }).from(payments).where(and(eq(payments.branchId, b.id), gte(payments.businessDay, '2026-10-13'))),
+        tx.select({ day: shifts.businessDay }).from(shifts).where(and(eq(shifts.branchId, b.id), gte(shifts.businessDay, '2026-10-13'))),
+        tx.select({ day: businessDays.day }).from(businessDays).where(and(eq(businessDays.branchId, b.id), gte(businessDays.day, '2026-10-13'))),
+      ]);
+
+      const daysSet = new Set<string>();
+      for (const r of allBills) if (r.day) daysSet.add(r.day);
+      for (const r of allPayments) if (r.day) daysSet.add(r.day);
+      for (const r of allShifts) if (r.day) daysSet.add(r.day);
+      for (const r of allDays) if (r.day) daysSet.add(r.day);
+
+      // Process in strictly ascending order: 2026-10-13 first, then 2026-10-14, etc.
+      const sortedDays = [...daysSet].sort();
+      const touchedTargetDays = new Set<string>();
+
+      for (const oldDay of sortedDays) {
+        const prevDay = DateTime.fromISO(oldDay).minus({ days: 1 }).toISODate()!;
+        touchedTargetDays.add(prevDay);
+
+        await tx.update(bills).set({ businessDay: prevDay }).where(and(eq(bills.branchId, b.id), eq(bills.businessDay, oldDay)));
+        await tx.update(payments).set({ businessDay: prevDay }).where(and(eq(payments.branchId, b.id), eq(payments.businessDay, oldDay)));
+        await tx.update(shifts).set({ businessDay: prevDay }).where(and(eq(shifts.branchId, b.id), eq(shifts.businessDay, oldDay)));
+        await tx.update(cashWithdrawals).set({ businessDay: prevDay }).where(and(eq(cashWithdrawals.branchId, b.id), eq(cashWithdrawals.businessDay, oldDay)));
+        await tx.update(stockMovements).set({ businessDay: prevDay }).where(and(eq(stockMovements.branchId, b.id), eq(stockMovements.businessDay, oldDay)));
+        await tx.update(dayCarries).set({ businessDay: prevDay }).where(and(eq(dayCarries.branchId, b.id), eq(dayCarries.businessDay, oldDay)));
+        await tx.update(rewards).set({ earnedDay: prevDay }).where(and(eq(rewards.branchId, b.id), eq(rewards.earnedDay, oldDay)));
+      }
+
+      // Ensure business_days rows exist for all touched target days
+      for (const targetDay of touchedTargetDays) {
+        const [existing] = await tx.select().from(businessDays).where(and(eq(businessDays.branchId, b.id), eq(businessDays.day, targetDay)));
+        if (!existing) {
+          const range = businessDayRange(targetDay, branch.timezone, branch.settings.day.cutoff);
+          await tx.insert(businessDays).values({
+            id: newId(),
+            branchId: b.id,
+            day: targetDay,
+            status: 'closed',
+            openedAt: new Date(range.start),
+            closedAt: new Date(range.end),
+            auto: true,
+            archived: false,
+          });
+        }
+      }
+
+      // Adjust the open business day if it was shifted
+      const [currentOpen] = await tx.select().from(businessDays).where(and(eq(businessDays.branchId, b.id), eq(businessDays.status, 'open')));
+      if (currentOpen && currentOpen.day >= '2026-10-13') {
+        const shiftedOpenDay = DateTime.fromISO(currentOpen.day).minus({ days: 1 }).toISODate()!;
+        await tx.update(businessDays).set({ status: 'open' }).where(and(eq(businessDays.branchId, b.id), eq(businessDays.day, shiftedOpenDay)));
+        // Close or remove the obsolete future day
+        await tx.delete(businessDays).where(and(eq(businessDays.branchId, b.id), eq(businessDays.day, currentOpen.day)));
+      }
+
+      // Rebuild day reports for all touched days that are closed
+      for (const targetDay of touchedTargetDays) {
+        const [d] = await tx.select().from(businessDays).where(and(eq(businessDays.branchId, b.id), eq(businessDays.day, targetDay)));
+        if (d && d.status === 'closed') {
+          try {
+            const report = await buildDayReport(tx, branch, targetDay, now);
+            await tx.update(businessDays).set({ report: report as unknown as Record<string, unknown> }).where(eq(businessDays.id, d.id));
+          } catch {
+            /* ignore report rebuild errors */
+          }
+        }
+      }
+
+      // Mark migration as done
+      await tx.insert(events).values({
+        id: newId(),
+        branchId: b.id,
+        type: 'system.ledger_shifted_oct13_v1',
+        entity: 'system',
+        payload: {
+          daysShifted: sortedDays,
+          shiftedAt: new Date(now).toISOString(),
+        },
+        createdAt: new Date(now),
+      });
     });
   }
 }

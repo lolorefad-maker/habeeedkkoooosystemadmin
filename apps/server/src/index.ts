@@ -6,7 +6,7 @@ import { openDatabase } from './db';
 import { attachRealtime } from './realtime';
 import { startScheduler, tick } from './scheduler';
 import { seedIfEmpty } from './seed';
-import { ensureDay11PaperSessions } from './services/manualEntry';
+import { ensureDay11PaperSessions, shiftLedgerDatesFromOct13 } from './services/manualEntry';
 
 const config = loadConfig();
 assertSafeConfig(config);
@@ -15,6 +15,7 @@ const seeded = await seedIfEmpty(database.db, { demo: config.seedDemo, owner: co
 
 const ctx: AppContext = { db: database.db, clock: systemClock, bus: new Bus(), config };
 await ensureDay11PaperSessions(ctx);
+await shiftLedgerDatesFromOct13(ctx);
 const app = await buildApp(ctx);
 const realtime = attachRealtime(app.server, ctx);
 
