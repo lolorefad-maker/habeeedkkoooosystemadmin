@@ -730,7 +730,7 @@ main{ overflow-x:clip; }
     <div class="hero-inner wrap">
       <div class="hero-top">
         <p class="label" data-i18n="hero.eyebrow">ميديا · مواقع · حملات إعلانية</p>
-        <p class="label tonight-chip"><svg class="phase" viewBox="0 0 24 24" data-moon-icon aria-hidden="true"><g transform="rotate(-18 12 12)"><circle class="ph-dark" cx="12" cy="12" r="10"/><path class="ph-lit" d=""/></g></svg><span data-i18n="moon.tonight">القمر الليلة</span><span>:</span> <span data-moon-name></span> · <span data-moon-pct></span></p>
+        <p class="label tonight-chip"><svg class="phase" viewBox="0 0 24 24" data-moon-icon aria-hidden="true"><g transform="rotate(-18 12 12)"><circle class="ph-dark" cx="12" cy="12" r="10"/><path class="ph-lit" d=""/></g></svg><span><span data-i18n="moon.tonight">القمر الليلة</span>: <span data-moon-name></span> · <span data-moon-pct></span></span></p>
       </div>
       <div class="hero-mid">
         <h1 class="wordmark" id="wordmark" aria-label="Luna"><span class="ch" aria-hidden="true"><span class="chi">L</span></span><span class="ch" aria-hidden="true"><span class="chi">U</span></span><span class="ch" aria-hidden="true"><span class="chi">N</span></span><span class="ch" aria-hidden="true"><span class="chi">A</span></span></h1>
@@ -1710,7 +1710,9 @@ function relayout(next){
   build();
   if (hasGSAP) ST.refresh();
   const y = Math.round(ratio * max());
+  navHoldUntil = performance.now() + 900;
   if (lenis) lenis.scrollTo(y, { immediate: true, force: true }); else window.scrollTo(0, y);
+  navEl.classList.remove('is-hidden');
   moon && moon.measure();
 }
 langBtn.addEventListener('click', () => {
@@ -1795,11 +1797,12 @@ function tickTimecode(now){
 }
 
 /* ---------- nav: hide on scroll down, moon-phase progress ---------- */
-let lastY = 0;
+let lastY = 0, navHoldUntil = 0;
 const navEl = $('#nav'), navPhase = $('#navPhase');
 function onScroll(){
   const y = window.scrollY || 0, max = Math.max(1, document.documentElement.scrollHeight - innerHeight);
   navPhase.setAttribute('d', phasePath(.03 + .97 * Math.min(1, y / max), 10, 12, 12));
+  if (performance.now() < navHoldUntil){ navEl.classList.remove('is-hidden'); lastY = y; return; }
   if (!menuOpen) navEl.classList.toggle('is-hidden', y > lastY + 2 && y > innerHeight * .6);
   if (y < lastY - 2) navEl.classList.remove('is-hidden');
   lastY = y;
