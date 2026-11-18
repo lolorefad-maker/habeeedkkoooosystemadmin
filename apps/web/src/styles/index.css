@@ -216,7 +216,7 @@ input[type='time']::-webkit-date-and-time-value {
 /* ------------------------------------------------------------------ motion */
 @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes fade-out { from { opacity: 1 } to { opacity: 0 } }
-@keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(0.98) } to { opacity: 1; transform: none } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.97) } to { opacity: 1; transform: scale(1) } }
 @keyframes sheet-in-rtl { from { transform: translateX(-100%) } to { transform: none } }
 @keyframes sheet-in-ltr { from { transform: translateX(100%) } to { transform: none } }
 @keyframes sheet-up { from { transform: translateY(100%) } to { transform: none } }
